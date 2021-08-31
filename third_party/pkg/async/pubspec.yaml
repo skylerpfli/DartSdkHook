@@ -1,0 +1,18 @@
+name: async
+version: 2.5.0-nullsafety.3-dev
+
+description: Utility functions and classes related to the 'dart:async' library.
+homepage: https://www.github.com/dart-lang/async
+
+environment:
+  # This must remain a tight constraint until nnbd is stable
+  sdk: '>=2.10.0-0 <2.12.0'
+
+dependencies:
+  collection: '>=1.15.0-nullsafety <1.15.0'
+
+dev_dependencies:
+  fake_async: ^1.2.0-nullsafety
+  stack_trace: ^1.10.0-nullsafety
+  test: ^1.16.0-nullsafety
+  pedantic: ^1.10.0-nullsafety

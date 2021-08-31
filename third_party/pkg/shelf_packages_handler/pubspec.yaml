@@ -1,0 +1,20 @@
+name: shelf_packages_handler
+version: 2.0.0
+
+description: A shelf handler for serving a `packages/` directory.
+homepage: https://github.com/dart-lang/shelf_packages_handler
+
+environment:
+  sdk: '>=2.0.0 <3.0.0'
+
+dependencies:
+  path: ^1.0.0
+  shelf: ^0.7.0
+  shelf_static: ^0.2.0
+
+dev_dependencies:
+  test: '>=1.0.0 <2.0.0'
+
+dependency_overrides:
+  # Required to get a pub solve
+  test: '>=1.0.0 <2.0.0'

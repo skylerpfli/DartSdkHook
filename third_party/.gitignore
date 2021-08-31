@@ -3,8 +3,6 @@
 # except for items in the pkg directory and self.
 # except for our files in boringssl.  The checkout is in boringssl/src.
 !.gitignore
-!pkg
-!pkg_tested
 !/tcmalloc
 !d8
 !7zip.tar.gz.sha1

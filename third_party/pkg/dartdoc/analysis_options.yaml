@@ -1,0 +1,41 @@
+# Change analysis_options.yaml and analysis_options_presubmit.yaml
+# together.
+include: package:pedantic/analysis_options.1.9.0.yaml
+
+analyzer:
+  errors:
+    unused_import: warning
+    unused_shown_name: warning
+  exclude:
+    - 'doc/**'
+    - 'lib/src/third_party/pkg/**'
+    - 'lib/templates/*.html'
+    - 'pub.dartlang.org/**'
+    - 'testing/**'
+    - 'testing/flutter_packages/test_package_flutter_plugin/**'
+    - 'testing/test_package_export_error/**'
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_single_cascade_in_expression_statements
+    - avoid_unused_constructor_parameters
+    - annotate_overrides
+    - avoid_init_to_null
+    - avoid_types_as_parameter_names
+    - camel_case_types
+    - directives_ordering
+    - iterable_contains_unrelated_type
+    - list_remove_unrelated_type
+    - no_adjacent_strings_in_list
+    - package_api_docs
+    - prefer_final_fields
+    - prefer_generic_function_type_aliases
+    - prefer_initializing_formals
+    - prefer_void_to_null
+    - provide_deprecation_message
+    - slash_for_doc_comments
+    - type_annotate_public_apis
+    - unawaited_futures
+    #    - unnecessary_brace_in_string_interps
+    - unnecessary_overrides
+    - void_checks

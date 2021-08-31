@@ -1,0 +1,13 @@
+# See with https://github.com/dart-lang/mono_repo for details on this file
+travis:
+  sudo: required
+  addons:
+    chrome: stable
+  env:
+    global: FORCE_TEST_EXIT=true
+
+  after_failure:
+  - tool/report_failure.sh
+
+merge_stages:
+- analyze_and_format
