@@ -9,6 +9,8 @@ import 'package:kernel/target/changed_structure_notifier.dart';
 import 'package:kernel/target/targets.dart';
 import 'package:kernel/transformations/track_widget_constructor_locations.dart';
 import 'package:vm/target/vm.dart' show VmTarget;
+import 'dart:convert';
+import 'dart:io';
 
 abstract class FlutterProgramTransformer {
   void transform(Component component);
@@ -19,15 +21,19 @@ class FlutterTarget extends VmTarget {
 
   WidgetCreatorTracker _widgetTracker;
 
-  static List<FlutterProgramTransformer> _flutterProgramTransformers = [];
-
-  static List<FlutterProgramTransformer> get flutterProgramTransformers => _flutterProgramTransformers;
-
   @override
   String get name => 'flutter';
 
   @override
   bool get enableSuperMixins => true;
+
+  /// Transformer
+  static List<FlutterProgramTransformer> _flutterProgramTransformers = [];
+
+  static List<FlutterProgramTransformer> get flutterProgramTransformers => _flutterProgramTransformers;
+
+  /// 额外添加的输入文件，避免从未被import时被优化
+  static List<Uri> entryPointList = [];
 
   // This is the order that bootstrap libraries are loaded according to
   // `runtime/vm/object_store.h`.
@@ -59,16 +65,8 @@ class FlutterTarget extends VmTarget {
   List<String> get extraRequiredLibrariesPlatform => const <String>[];
 
   @override
-  void performPreConstantEvaluationTransformations(
-      Component component,
-      CoreTypes coreTypes,
-      List<Library> libraries,
-      DiagnosticReporter diagnosticReporter,
-      {void logger(String msg),
-      ChangedStructureNotifier changedStructureNotifier}) {
-    super.performPreConstantEvaluationTransformations(
-        component, coreTypes, libraries, diagnosticReporter,
-        logger: logger, changedStructureNotifier: changedStructureNotifier);
+  void performPreConstantEvaluationTransformations(Component component, CoreTypes coreTypes, List<Library> libraries, DiagnosticReporter diagnosticReporter, {void logger(String msg), ChangedStructureNotifier changedStructureNotifier}) {
+    super.performPreConstantEvaluationTransformations(component, coreTypes, libraries, diagnosticReporter, logger: logger, changedStructureNotifier: changedStructureNotifier);
     if (flags.trackWidgetCreation) {
       if (_widgetTracker == null) {
         _widgetTracker = WidgetCreatorTracker();
@@ -76,9 +74,10 @@ class FlutterTarget extends VmTarget {
       _widgetTracker.transform(component, libraries, changedStructureNotifier);
     }
 
+    /// 工程插桩
     if (_flutterProgramTransformers.length > 0) {
       int flutterProgramTransformersLen = _flutterProgramTransformers.length;
-      for (int i=0; i<flutterProgramTransformersLen; i++) {
+      for (int i = 0; i < flutterProgramTransformersLen; i++) {
         _flutterProgramTransformers[i].transform(component);
       }
     }
