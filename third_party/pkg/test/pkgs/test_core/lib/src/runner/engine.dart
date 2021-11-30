@@ -3,7 +3,6 @@
 // BSD-style license that can be found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:collection';
 import 'dart:math';
 
 import 'package:async/async.dart' hide Result;
@@ -217,7 +216,7 @@ class Engine {
       _onTestStartedGroup.close();
       _onSuiteStartedController.close();
       _closedBeforeDone ??= false;
-    }).catchError((_) {
+    }).onError((_, __) {
       // Don't top-level errors. They'll be thrown via [success] anyway.
     });
   }

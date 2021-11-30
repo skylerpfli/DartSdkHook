@@ -2,8 +2,6 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'dart:async';
-
 import 'package:stream_channel/stream_channel.dart';
 
 import 'package:test_api/src/backend/suite_platform.dart'; // ignore: implementation_imports
@@ -43,7 +41,7 @@ abstract class PlatformPlugin {
   /// associated with this plugin in [new Loader]'s `plugins` parameter.
   // TODO(grouma) - Remove this method from the API as no platforms implement
   // it.
-  StreamChannel loadChannel(String path, SuitePlatform platform);
+  StreamChannel<dynamic> loadChannel(String path, SuitePlatform platform);
 
   /// Loads the runner suite for the test file at [path] using [platform], with
   /// [suiteConfig] encoding the suite-specific configuration.

@@ -23,12 +23,12 @@ with a meaningless name like `call` or `invoke`, there is a good chance
 you just want a function.
 
 **GOOD:**
-```
+```dart
 typedef Predicate = bool Function(item);
 ```
 
 **BAD:**
-```
+```dart
 abstract class Predicate {
   bool test(item);
 }
@@ -59,10 +59,14 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
-    if (node.declaredElement.interfaces.isNotEmpty) {
+    var declaredElement = node.declaredElement;
+    if (declaredElement == null) {
       return;
     }
-    if (node.declaredElement.mixins.isNotEmpty) {
+    if (declaredElement.interfaces.isNotEmpty) {
+      return;
+    }
+    if (declaredElement.mixins.isNotEmpty) {
       return;
     }
     if (node.isAbstract &&

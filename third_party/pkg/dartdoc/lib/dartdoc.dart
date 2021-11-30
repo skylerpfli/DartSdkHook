@@ -13,6 +13,7 @@ import 'dart:convert';
 import 'dart:io' show exitCode, stderr;
 
 import 'package:analyzer/file_system/file_system.dart';
+import 'package:dartdoc/options.dart';
 import 'package:dartdoc/src/dartdoc_options.dart';
 import 'package:dartdoc/src/generator/empty_generator.dart';
 import 'package:dartdoc/src/generator/generator.dart';
@@ -40,17 +41,10 @@ const String programName = 'dartdoc';
 // Update when pubspec version changes by running `pub run build_runner build`
 const String dartdocVersion = packageVersion;
 
-/// Helper class that consolidates option contexts for instantiating generators.
-class DartdocGeneratorOptionContext extends DartdocOptionContext
-    with GeneratorContext {
-  DartdocGeneratorOptionContext(
-      DartdocOptionSet optionSet, Folder dir, ResourceProvider resourceProvider)
-      : super(optionSet, dir, resourceProvider);
-}
-
 class DartdocFileWriter implements FileWriter {
   final String outputDir;
-  ResourceProvider resourceProvider;
+  @override
+  final ResourceProvider resourceProvider;
   final Map<String, Warnable> _fileElementMap = {};
   @override
   final Set<String> writtenFiles = {};
@@ -67,7 +61,7 @@ class DartdocFileWriter implements FileWriter {
     if (!allowOverwrite) {
       if (_fileElementMap.containsKey(outFile)) {
         assert(element != null,
-            'Attempted overwrite of ${outFile} without corresponding element');
+            'Attempted overwrite of $outFile without corresponding element');
         var originalElement = _fileElementMap[outFile];
         Iterable<Warnable> referredFrom =
             originalElement != null ? [originalElement] : null;
@@ -79,7 +73,7 @@ class DartdocFileWriter implements FileWriter {
 
     var file = resourceProvider
         .getFile(resourceProvider.pathContext.join(outputDir, outFile));
-    var parent = file.parent;
+    var parent = file.parent2;
     if (!parent.exists) {
       parent.create();
     }
@@ -182,7 +176,7 @@ class Dartdoc {
     packageGraph = await packageBuilder.buildPackageGraph();
     seconds = _stopwatch.elapsedMilliseconds / 1000.0;
     var libs = packageGraph.libraries.length;
-    logInfo("Initialized dartdoc with ${libs} librar${libs == 1 ? 'y' : 'ies'} "
+    logInfo("Initialized dartdoc with $libs librar${libs == 1 ? 'y' : 'ies'} "
         'in ${seconds.toStringAsFixed(1)} seconds');
     _stopwatch.reset();
 
@@ -205,13 +199,13 @@ class Dartdoc {
     if (warnings == 0 && errors == 0) {
       logInfo('no issues found');
     } else {
-      logWarning("found ${warnings} ${pluralize('warning', warnings)} "
-          "and ${errors} ${pluralize('error', errors)}");
+      logWarning("Found $warnings ${pluralize('warning', warnings)} "
+          "and $errors ${pluralize('error', errors)}.");
     }
 
     seconds = _stopwatch.elapsedMilliseconds / 1000.0;
     libs = packageGraph.localPublicLibraries.length;
-    logInfo("Documented ${libs} public librar${libs == 1 ? 'y' : 'ies'} "
+    logInfo("Documented $libs public librar${libs == 1 ? 'y' : 'ies'} "
         'in ${seconds.toStringAsFixed(1)} seconds');
     return DartdocResults(config.topLevelPackageMeta, packageGraph, outputDir);
   }
@@ -228,8 +222,7 @@ class Dartdoc {
       final errorCount =
           dartdocResults.packageGraph.packageWarningCounter.errorCount;
       if (errorCount > 0) {
-        throw DartdocFailure(
-            'dartdoc encountered $errorCount errors while processing.');
+        throw DartdocFailure('encountered $errorCount errors');
       }
       var outDirPath = config.resourceProvider.pathContext
           .absolute(dartdocResults.outDir.path);
@@ -273,12 +266,8 @@ class Dartdoc {
       referredFromElements.removeWhere((e) => !e.isCanonical);
     }
     if (warnOnElements != null) {
-      if (warnOnElements.any((e) => e.isCanonical)) {
-        warnOnElement = warnOnElements.firstWhere((e) => e.isCanonical);
-      } else {
-        // If we don't have a canonical element, just pick one.
-        warnOnElement = warnOnElements.isEmpty ? null : warnOnElements.first;
-      }
+      warnOnElement = warnOnElements.firstWhere((e) => e.isCanonical,
+          orElse: () => warnOnElements.isEmpty ? null : warnOnElements.first);
     }
 
     if (referredFromElements.isEmpty && referredFrom == 'index.html') {
@@ -321,8 +310,7 @@ class Dartdoc {
         } else {
           // Error messages are orphaned by design and do not appear in the search
           // index.
-          if (<String>['__404error.html', 'categories.json']
-              .contains(fullPath)) {
+          if (const {'__404error.html', 'categories.json'}.contains(fullPath)) {
             _warn(packageGraph, PackageWarning.orphanedFile, fullPath,
                 normalOrigin);
           }
@@ -342,7 +330,7 @@ class Dartdoc {
   // This is extracted to save memory during the check; be careful not to hang
   // on to anything referencing the full file and doc tree.
   Tuple2<Iterable<String>, String> _getStringLinksAndHref(String fullPath) {
-    var file = config.resourceProvider.getFile('$fullPath');
+    var file = config.resourceProvider.getFile(fullPath);
     if (!file.exists) {
       return null;
     }
@@ -368,7 +356,7 @@ class Dartdoc {
       PackageGraph packageGraph, String origin, Set<String> visited) {
     var fullPath = path.joinAll([origin, 'index.json']);
     var indexPath = path.joinAll([origin, 'index.html']);
-    var file = config.resourceProvider.getFile('$fullPath');
+    var file = config.resourceProvider.getFile(fullPath);
     if (!file.exists) {
       return null;
     }
@@ -382,7 +370,8 @@ class Dartdoc {
     found.add(indexPath);
     for (Map<String, dynamic> entry in jsonData) {
       if (entry.containsKey('href')) {
-        var entryPath = path.joinAll([origin, entry['href']]);
+        var entryPath =
+            path.joinAll([origin, ...path.posix.split(entry['href'])]);
         if (!visited.contains(entryPath)) {
           _warn(packageGraph, PackageWarning.brokenLink, entryPath,
               path.normalize(origin),
@@ -392,8 +381,8 @@ class Dartdoc {
       }
     }
     // Missing from search index
-    var missing_from_search = visited.difference(found);
-    for (var s in missing_from_search) {
+    var missingFromSearch = visited.difference(found);
+    for (var s in missingFromSearch) {
       _warn(packageGraph, PackageWarning.missingFromSearchIndex, s,
           path.normalize(origin),
           referredFrom: fullPath);
@@ -403,10 +392,7 @@ class Dartdoc {
   void _doCheck(PackageGraph packageGraph, String origin, Set<String> visited,
       String pathToCheck,
       [String source, String fullPath]) {
-    if (fullPath == null) {
-      fullPath = path.joinAll([origin, pathToCheck]);
-      fullPath = path.normalize(fullPath);
-    }
+    fullPath ??= path.normalize(path.joinAll([origin, pathToCheck]));
 
     var stringLinksAndHref = _getStringLinksAndHref(fullPath);
     if (stringLinksAndHref == null) {
@@ -430,14 +416,9 @@ class Dartdoc {
     var toVisit = <Tuple2<String, String>>{};
 
     final ignoreHyperlinks = RegExp(r'^(https:|http:|mailto:|ftp:)');
-    for (var href in stringLinks) {
+    for (final href in stringLinks) {
       if (!href.startsWith(ignoreHyperlinks)) {
-        Uri uri;
-        try {
-          uri = Uri.parse(href);
-        } on FormatException {
-          // ignore
-        }
+        final uri = Uri.tryParse(href);
 
         if (uri == null || !uri.hasAuthority && !uri.hasFragment) {
           String full;
@@ -446,9 +427,10 @@ class Dartdoc {
           } else {
             full = '${path.dirname(pathToCheck)}/$href';
           }
-          var newPathToCheck = path.normalize(full);
-          var newFullPath = path.joinAll([origin, newPathToCheck]);
-          newFullPath = path.normalize(newFullPath);
+
+          final newPathToCheck = path.normalize(full);
+          final newFullPath =
+              path.normalize(path.joinAll([origin, newPathToCheck]));
           if (!visited.contains(newFullPath)) {
             toVisit.add(Tuple2(newPathToCheck, newFullPath));
             visited.add(newFullPath);
@@ -472,9 +454,8 @@ class Dartdoc {
     _hrefs = packageGraph.allHrefs;
 
     final visited = <String>{};
-    final start = 'index.html';
     logInfo('Validating docs...');
-    _doCheck(packageGraph, origin, visited, start);
+    _doCheck(packageGraph, origin, visited, 'index.html');
     _doOrphanCheck(packageGraph, origin, visited);
     _doSearchIndexCheck(packageGraph, origin, visited);
   }
@@ -502,13 +483,10 @@ class Dartdoc {
       },
       (e, chain) {
         if (e is DartdocFailure) {
-          stderr.writeln('\ndartdoc failed: ${e}.');
-          if (config.verboseWarnings) {
-            stderr.writeln(chain);
-          }
+          stderr.writeln('\ndartdoc failed: $e.');
           exitCode = 1;
         } else {
-          stderr.writeln('\ndartdoc failed: ${e}\n${chain}');
+          stderr.writeln('\ndartdoc failed: $e\n$chain');
           exitCode = 255;
         }
       },

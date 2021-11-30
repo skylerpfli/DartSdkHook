@@ -18,13 +18,13 @@ When declaring an async method or function which does not return a value,
 declare that it returns Future<void> and not just void.
 
 **BAD:**
-```
+```dart
 void f() async {}
 void f2() async => null;
 ```
 
 **GOOD:**
-```
+```dart
 Future<void> f() async {}
 Future<void> f2() async => null;
 ```
@@ -67,13 +67,13 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
   }
 
-  bool _isAsync(ExecutableElement element) {
+  bool _isAsync(ExecutableElement? element) {
     if (element == null) {
       return false;
     }
     return element.isAsynchronous || element.isGenerator;
   }
 
-  bool _isVoid(TypeAnnotation typeAnnotation) =>
+  bool _isVoid(TypeAnnotation? typeAnnotation) =>
       typeAnnotation?.type?.isVoid ?? false;
 }

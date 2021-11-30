@@ -14,7 +14,7 @@ const _details = r'''
 When building maps from iterables, it is preferable to use for elements.
 
 **BAD:**
-```
+```dart
 Map<String, WidgetBuilder>.fromIterable(
   kAllGalleryDemos,
   key: (demo) => '${demo.routeName}',
@@ -24,7 +24,7 @@ Map<String, WidgetBuilder>.fromIterable(
 ```
 
 **GOOD:**
-```
+```dart
 return {
   for (var demo in kAllGalleryDemos)
     '${demo.routeName}': demo.buildRoute,
@@ -58,7 +58,8 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression creation) {
     final element = creation.constructorName.staticElement;
-    if (element?.name != 'fromIterable' ||
+    if (element == null ||
+        element.name != 'fromIterable' ||
         element.enclosingElement != context.typeProvider.mapElement) {
       return;
     }
@@ -74,7 +75,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     final secondArg = arguments[1];
     final thirdArg = arguments[2];
 
-    Expression extractBody(FunctionExpression expression) {
+    Expression? extractBody(FunctionExpression expression) {
       final body = expression.body;
       if (body is ExpressionFunctionBody) {
         return body.expression;
@@ -90,12 +91,14 @@ class _Visitor extends SimpleAstVisitor<void> {
       return null;
     }
 
-    FunctionExpression extractClosure(String name, Expression argument) {
+    FunctionExpression? extractClosure(String name, Expression argument) {
       if (argument is NamedExpression && argument.name.label.name == name) {
         final expression = argument.expression.unParenthesized;
         if (expression is FunctionExpression) {
-          final parameters = expression.parameters.parameters;
-          if (parameters.length == 1 && parameters[0].isRequired) {
+          final parameters = expression.parameters?.parameters;
+          if (parameters != null &&
+              parameters.length == 1 &&
+              parameters[0].isRequired) {
             if (extractBody(expression) != null) {
               return expression;
             }

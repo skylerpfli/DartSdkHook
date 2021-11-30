@@ -1,4 +1,31 @@
-## 3.6.1-dev
+## 3.8.3-dev
+
+- Require the latest shelf and remove dead code.
+
+## 3.8.2
+
+- Complete `onConnected` with an error if the `SseClient` receives an error
+  before the connection is successfully opened.
+
+## 3.8.1
+
+- Fix an issue where closing the `SseConnection` stream would result in
+  an error.
+
+## 3.8.0
+
+- Add `onConnected` to replace `onOpen`.
+- Fix an issue where failed requests would not add a `done` event to the
+  connection `sink`.
+
+## 3.7.0
+
+- Deprecate the client's `onOpen` getter. Messages will now be buffered until
+  a connection is established.
+
+## 3.6.1
+
+- Drop dependency on `package:uuid`.
 
 ## 3.6.0
 

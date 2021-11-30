@@ -4,7 +4,6 @@
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
-import 'package:meta/meta.dart';
 
 import '../analyzer.dart';
 
@@ -15,12 +14,12 @@ const _details = r'''
 Avoid escaping inner quotes by converting surrounding quotes.
 
 **BAD:**
-```
+```dart
 var s = 'It\'s not fun';
 ```
 
 **GOOD:**
-```
+```dart
 var s = "It's not fun";
 ```
 
@@ -70,7 +69,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
   }
 
-  bool isChangeable(String text, {@required bool isSingleQuoted}) =>
+  bool isChangeable(String text, {required bool isSingleQuoted}) =>
       text.contains(isSingleQuoted ? "'" : '"') &&
       !text.contains(isSingleQuoted ? '"' : "'");
 }

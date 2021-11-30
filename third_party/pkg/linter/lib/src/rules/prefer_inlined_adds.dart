@@ -15,13 +15,13 @@ Declare elements in list literals inline, rather than using `add` and
 
 
 **BAD:**
-```
+```dart
 var l = ['a']..add('b')..add('c');
 var l2 = ['a']..addAll(['b', 'c'])
 ```
 
 **GOOD:**
-```
+```dart
 var l = ['a', 'b', 'c'];
 var 2 = ['a', 'b', 'c'];
 ```
@@ -58,9 +58,10 @@ class _Visitor extends SimpleAstVisitor {
     }
 
     final cascade = invocation.thisOrAncestorOfType<CascadeExpression>();
-    final sections = cascade.cascadeSections;
-    final target = cascade.target;
-    if (target is! ListLiteral || sections[0] != invocation) {
+    final sections = cascade?.cascadeSections;
+    final target = cascade?.target;
+    if (target is! ListLiteral ||
+        (sections != null && sections[0] != invocation)) {
       // todo (pq): consider extending to handle set literals.
       return;
     }

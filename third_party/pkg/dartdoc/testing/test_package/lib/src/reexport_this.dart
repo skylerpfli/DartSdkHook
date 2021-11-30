@@ -1,3 +1,4 @@
+// @dart=2.9
 
 library reexport_this;
 
@@ -8,5 +9,4 @@ library reexport_this;
 ///
 /// And if I do, a test should fail.
 /// {@endtemplate}
-class ClassTemplateOneLiner {
-}
+class ClassTemplateOneLiner {}

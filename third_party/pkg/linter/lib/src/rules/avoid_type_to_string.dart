@@ -20,7 +20,7 @@ Development-mode compilers where code size is not a concern use the full name,
 but release-mode compilers often choose to minify these symbols.
 
 **BAD:**
-```
+```dart
 void bar(Object other) {
   if (other.runtimeType.toString() == 'Bar') {
     doThing();
@@ -33,7 +33,7 @@ Object baz(Thing myThing) {
 ```
 
 **GOOD:**
-```
+```dart
 void bar(Object other) {
   if (other is Bar) {
     doThing();
@@ -62,7 +62,6 @@ class AvoidTypeToString extends LintRule implements NodeLintRule {
   @override
   void registerNodeProcessors(
       NodeLintRegistry registry, LinterContext context) {
-    assert(context != null);
     final visitor =
         _Visitor(this, context.typeSystem, context.typeProvider.typeType);
     // Gathering meta information at these nodes.
@@ -86,35 +85,33 @@ class _Visitor extends SimpleAstVisitor {
   final InterfaceType typeType;
 
   // Null if there is no logical `this` in the given context.
-  InterfaceType thisType;
+  InterfaceType? thisType;
 
   _Visitor(this.rule, this.typeSystem, this.typeType);
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
-    thisType = node.declaredElement.thisType;
+    thisType = node.declaredElement?.thisType;
   }
 
   @override
   void visitMixinDeclaration(MixinDeclaration node) {
-    thisType = node.declaredElement.thisType;
+    thisType = node.declaredElement?.thisType;
   }
 
   @override
   void visitExtensionDeclaration(ExtensionDeclaration node) {
+    var extendedType = node.declaredElement?.extendedType;
     // Might not be InterfaceType. Ex: visiting an extension on a dynamic type.
-    thisType = (node.declaredElement.extendedType is InterfaceType)
-        ? node.declaredElement.extendedType as InterfaceType
-        : null;
+    thisType = extendedType is InterfaceType ? extendedType : null;
   }
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
     visitArgumentList(node.argumentList);
 
-    final targetType = (node.realTarget?.staticType is InterfaceType)
-        ? node.realTarget.staticType as InterfaceType
-        : thisType;
+    var staticType = node.realTarget?.staticType;
+    final targetType = staticType is InterfaceType ? staticType : thisType;
     _reportIfToStringOnCoreTypeClass(targetType, node.methodName);
   }
 
@@ -125,9 +122,9 @@ class _Visitor extends SimpleAstVisitor {
 
   void _validateArgument(Expression expression) {
     if (expression is PropertyAccess) {
-      final targetType = (expression.realTarget?.staticType is InterfaceType)
-          ? expression.realTarget?.staticType as InterfaceType
-          : thisType;
+      var expressionType = expression.realTarget.staticType;
+      final targetType =
+          (expressionType is InterfaceType) ? expressionType : thisType;
       _reportIfToStringOnCoreTypeClass(targetType, expression.propertyName);
     } else if (expression is PrefixedIdentifier) {
       final prefixType = expression.prefix.staticType;
@@ -140,21 +137,21 @@ class _Visitor extends SimpleAstVisitor {
   }
 
   void _reportIfToStringOnCoreTypeClass(
-      InterfaceType targetType, SimpleIdentifier methodIdentifier) {
+      InterfaceType? targetType, SimpleIdentifier methodIdentifier) {
     if (_isToStringOnCoreTypeClass(targetType, methodIdentifier)) {
       rule.reportLint(methodIdentifier);
     }
   }
 
   bool _isToStringOnCoreTypeClass(
-          InterfaceType targetType, SimpleIdentifier methodIdentifier) =>
+          InterfaceType? targetType, SimpleIdentifier methodIdentifier) =>
       targetType != null &&
       methodIdentifier.name == 'toString' &&
       _isSimpleIdDeclByCoreObj(methodIdentifier) &&
       typeSystem.isSubtypeOf(targetType, typeType);
 
   bool _isSimpleIdDeclByCoreObj(SimpleIdentifier simpleIdentifier) {
-    final encloser = simpleIdentifier?.staticElement?.enclosingElement;
+    final encloser = simpleIdentifier.staticElement?.enclosingElement;
     return encloser is ClassElement && encloser.isDartCoreObject;
   }
 }

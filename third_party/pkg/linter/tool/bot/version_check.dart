@@ -16,8 +16,8 @@ void main() async {
   print('Checking for a git release tag corresponding to $latestVersion...');
 
   var client = http.Client();
-  var req = await client
-      .get('https://github.com/dart-lang/linter/releases/tag/$latestVersion');
+  var req = await client.get(Uri.parse(
+      'https://github.com/dart-lang/linter/releases/tag/$latestVersion'));
 
   if (req.statusCode == 404) {
     print(
@@ -34,4 +34,5 @@ final _client = http.Client();
 
 Future<String> getBody(String url) async => (await getResponse(url)).body;
 
-Future<http.Response> getResponse(String url) async => _client.get(url);
+Future<http.Response> getResponse(String url) async =>
+    _client.get(Uri.parse(url));

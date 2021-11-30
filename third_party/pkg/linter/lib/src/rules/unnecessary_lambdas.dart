@@ -17,20 +17,20 @@ const _details = r'''
 **DON'T** create a lambda when a tear-off will do.
 
 **BAD:**
-```
+```dart
 names.forEach((name) {
   print(name);
 });
 ```
 
 **GOOD:**
-```
+```dart
 names.forEach(print);
 ```
 
 ''';
 
-bool _containsNullAwareInvocationInChain(AstNode node) =>
+bool _containsNullAwareInvocationInChain(AstNode? node) =>
     node != null &&
     ((node is PropertyAccess &&
             (node.isNullAware ||
@@ -41,7 +41,7 @@ bool _containsNullAwareInvocationInChain(AstNode node) =>
         (node is IndexExpression &&
             _containsNullAwareInvocationInChain(node.target)));
 
-Iterable<Element> _extractElementsOfSimpleIdentifiers(AstNode node) =>
+Iterable<Element?> _extractElementsOfSimpleIdentifiers(AstNode node) =>
     DartTypeUtilities.traverseNodesInDFS(node)
         .whereType<SimpleIdentifier>()
         .map((e) => e.staticElement);
@@ -63,11 +63,11 @@ class UnnecessaryLambdas extends LintRule implements NodeLintRule {
 }
 
 class _FinalExpressionChecker {
-  final Set<ParameterElement> parameters;
+  final Set<ParameterElement?> parameters;
 
   _FinalExpressionChecker(this.parameters);
 
-  bool isFinalElement(Element element) {
+  bool isFinalElement(Element? element) {
     if (element is PropertyAccessorElement) {
       return element.isSynthetic && element.variable.isFinal;
     } else if (element is VariableElement) {
@@ -76,7 +76,7 @@ class _FinalExpressionChecker {
     return true;
   }
 
-  bool isFinalNode(Expression node) {
+  bool isFinalNode(Expression? node) {
     if (node == null) {
       return true;
     }
@@ -118,20 +118,23 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    if (node.declaredElement.name != '' || node.body.keyword != null) {
+    if (node.declaredElement?.name != '' || node.body.keyword != null) {
       return;
     }
     final body = node.body;
     if (body is BlockFunctionBody && body.block.statements.length == 1) {
       final statement = body.block.statements.single;
+
       if (statement is ExpressionStatement &&
           statement.expression is InvocationExpression) {
         _visitInvocationExpression(
             statement.expression as InvocationExpression, node);
       } else if (statement is ReturnStatement &&
           statement.expression is InvocationExpression) {
-        _visitInvocationExpression(
-            statement.expression as InvocationExpression, node);
+        var expression = statement.expression;
+        if (expression is InvocationExpression) {
+          _visitInvocationExpression(expression, node);
+        }
       }
     } else if (body is ExpressionFunctionBody) {
       if (body.expression is InvocationExpression) {
@@ -143,23 +146,25 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   void _visitInvocationExpression(
       InvocationExpression node, FunctionExpression nodeToLint) {
-    if (!DartTypeUtilities.matchesArgumentsWithParameters(
-        node.argumentList.arguments, nodeToLint.parameters.parameters)) {
+    var nodeToLintParams = nodeToLint.parameters?.parameters;
+    if (nodeToLintParams == null ||
+        !DartTypeUtilities.matchesArgumentsWithParameters(
+            node.argumentList.arguments, nodeToLintParams)) {
       return;
     }
 
-    bool isTearoffAssignable(DartType assignedType) {
+    bool isTearoffAssignable(DartType? assignedType) {
       if (assignedType != null) {
         var tearoffType = node.staticInvokeType;
-        if (!context.typeSystem.isSubtypeOf(tearoffType, assignedType)) {
+        if (tearoffType == null ||
+            !context.typeSystem.isSubtypeOf(tearoffType, assignedType)) {
           return false;
         }
       }
       return true;
     }
 
-    final parameters =
-        nodeToLint.parameters.parameters.map((e) => e.declaredElement).toSet();
+    final parameters = nodeToLintParams.map((e) => e.declaredElement).toSet();
     if (node is FunctionExpressionInvocation) {
       // todo (pq): consider checking for assignability
       // see: https://github.com/dart-lang/linter/issues/1561
@@ -188,10 +193,12 @@ class _Visitor extends SimpleAstVisitor<void> {
           return;
         }
       } else if (parent is VariableDeclaration) {
-        var variableDeclarationList = parent.parent as VariableDeclarationList;
-        var variableType = variableDeclarationList.type?.type;
-        if (!isTearoffAssignable(variableType)) {
-          return;
+        var grandparent = parent.parent;
+        if (grandparent is VariableDeclarationList) {
+          var variableType = grandparent.type?.type;
+          if (!isTearoffAssignable(variableType)) {
+            return;
+          }
         }
       }
 

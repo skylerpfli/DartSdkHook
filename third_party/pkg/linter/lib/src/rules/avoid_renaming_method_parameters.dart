@@ -21,7 +21,7 @@ documentation. If the inherited method contains the name of the parameter (in
 square brackets), then dartdoc cannot link it correctly.
 
 **BAD:**
-```
+```dart
 abstract class A {
   m(a);
 }
@@ -32,7 +32,7 @@ abstract class B extends A {
 ```
 
 **GOOD:**
-```
+```dart
 abstract class A {
   m(a);
 }
@@ -75,14 +75,17 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (node.isStatic) return;
     if (node.documentationComment != null) return;
 
-    final parentNode = node.parent as Declaration;
+    final parentNode = node.parent;
+    if (parentNode is! Declaration) {
+      return;
+    }
     final parentElement = parentNode.declaredElement;
     // Note: there are no override semantics with extension methods.
     if (parentElement is! ClassElement) {
       return;
     }
 
-    final classElement = parentElement as ClassElement;
+    final classElement = parentElement;
 
     if (classElement.isPrivate) return;
 
@@ -91,14 +94,20 @@ class _Visitor extends SimpleAstVisitor<void> {
 
     if (parentMethod == null) return;
 
-    final parameters =
-        node.parameters.parameters.where((p) => !p.isNamed).toList();
+    var nodeParams = node.parameters;
+    if (nodeParams == null) {
+      return;
+    }
+
+    final parameters = nodeParams.parameters.where((p) => !p.isNamed).toList();
     final parentParameters =
         parentMethod.parameters.where((p) => !p.isNamed).toList();
     final count = math.min(parameters.length, parentParameters.length);
     for (var i = 0; i < count; i++) {
       if (parentParameters.length <= i) break;
-      if (parameters[i].identifier.name != parentParameters[i].name) {
+      var paramIdentifier = parameters[i].identifier;
+      if (paramIdentifier != null &&
+          paramIdentifier.name != parentParameters[i].name) {
         rule.reportLint(parameters[i].identifier);
       }
     }

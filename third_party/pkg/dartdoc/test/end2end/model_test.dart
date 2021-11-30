@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:dartdoc/dartdoc.dart';
+import 'package:dartdoc/src/model/feature.dart';
 import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/render/category_renderer.dart';
 import 'package:dartdoc/src/render/enum_field_renderer.dart';
@@ -15,7 +16,6 @@ import 'package:dartdoc/src/render/model_element_renderer.dart';
 import 'package:dartdoc/src/render/parameter_renderer.dart';
 import 'package:dartdoc/src/render/typedef_renderer.dart';
 import 'package:dartdoc/src/special_elements.dart';
-import 'package:dartdoc/src/tuple.dart';
 import 'package:dartdoc/src/warnings.dart';
 import 'package:test/test.dart';
 
@@ -89,6 +89,220 @@ void main() {
         packageGraph.libraries.firstWhere((lib) => lib.name == 'base_class');
   });
 
+  group('NNBD cases', () {
+    Library lateFinalWithoutInitializer,
+        nullSafetyClassMemberDeclarations,
+        optOutOfNullSafety,
+        nullableElements;
+    Class b;
+    Class c;
+    ModelFunction oddAsyncFunction, anotherOddFunction;
+    ModelFunction neverReturns, almostNeverReturns;
+
+    setUpAll(() async {
+      lateFinalWithoutInitializer = packageGraph.libraries
+          .firstWhere((lib) => lib.name == 'late_final_without_initializer');
+      nullSafetyClassMemberDeclarations = packageGraph.libraries
+          .firstWhere((lib) => lib.name == 'nnbd_class_member_declarations');
+      optOutOfNullSafety = packageGraph.libraries
+          .firstWhere((lib) => lib.name == 'opt_out_of_nnbd');
+      nullableElements = packageGraph.libraries
+          .firstWhere((lib) => lib.name == 'nullable_elements');
+      b = nullSafetyClassMemberDeclarations.allClasses
+          .firstWhere((c) => c.name == 'B');
+      c = nullSafetyClassMemberDeclarations.allClasses
+          .firstWhere((c) => c.name == 'C');
+      oddAsyncFunction = nullableElements.publicFunctions
+          .firstWhere((f) => f.name == 'oddAsyncFunction');
+      anotherOddFunction = nullableElements.publicFunctions
+          .firstWhere((f) => f.name == 'oddAsyncFunction');
+      neverReturns = nullableElements.publicFunctions
+          .firstWhere((f) => f.name == 'neverReturns');
+      almostNeverReturns = nullableElements.publicFunctions
+          .firstWhere((f) => f.name == 'almostNeverReturns');
+    });
+
+    test('Never types are allowed to have nullability markers', () {
+      expect(neverReturns.modelType.returnType.name, equals('Never'));
+      expect(neverReturns.modelType.returnType.nullabilitySuffix, equals(''));
+      expect(almostNeverReturns.modelType.returnType.name, equals('Never'));
+      expect(almostNeverReturns.modelType.returnType.nullabilitySuffix,
+          equals('?'));
+    });
+
+    test('implied Future types have correct nullability', () {
+      expect(oddAsyncFunction.modelType.returnType.name, equals('Future'));
+      expect(
+          oddAsyncFunction.modelType.returnType.nullabilitySuffix, equals('?'));
+      expect(anotherOddFunction.modelType.returnType.name, equals('Future'));
+      expect(anotherOddFunction.modelType.returnType.nullabilitySuffix,
+          equals('?'));
+    });
+
+    test('isNullSafety is set correctly for libraries', () {
+      expect(lateFinalWithoutInitializer.isNullSafety, isTrue);
+      expect(optOutOfNullSafety.isNullSafety, isFalse);
+    });
+
+    test('method parameters with required', () {
+      var m1 = b.instanceMethods.firstWhere((m) => m.name == 'm1');
+      var p1 = m1.allParameters.firstWhere((p) => p.name == 'p1');
+      var p2 = m1.allParameters.firstWhere((p) => p.name == 'p2');
+      expect(p1.isRequiredNamed, isTrue);
+      expect(p2.isRequiredNamed, isFalse);
+      expect(p2.isNamed, isTrue);
+
+      expect(
+          m1.linkedParamsLines,
+          equals(
+              '<ol class="parameter-list"><li><span class="parameter" id="m1-param-some"><span class="type-annotation">int</span> <span class="parameter-name">some</span>, </span></li>\n'
+              '<li><span class="parameter" id="m1-param-regular"><span class="type-annotation">dynamic</span> <span class="parameter-name">regular</span>, </span></li>\n'
+              '<li><span class="parameter" id="m1-param-parameters"><span>covariant</span> <span class="type-annotation">dynamic</span> <span class="parameter-name">parameters</span>, </span></li>\n'
+              '<li><span class="parameter" id="m1-param-p1">{<span>required</span> <span class="type-annotation">dynamic</span> <span class="parameter-name">p1</span>, </span></li>\n'
+              '<li><span class="parameter" id="m1-param-p2"><span class="type-annotation">int</span> <span class="parameter-name">p2</span> = <span class="default-value">3</span>, </span></li>\n'
+              '<li><span class="parameter" id="m1-param-p3"><span>required</span> <span>covariant</span> <span class="type-annotation">dynamic</span> <span class="parameter-name">p3</span>, </span></li>\n'
+              '<li><span class="parameter" id="m1-param-p4"><span>required</span> <span>covariant</span> <span class="type-annotation">int</span> <span class="parameter-name">p4</span>}</span></li>\n'
+              '</ol>'));
+    });
+
+    test('verify no regression on ordinary optionals', () {
+      var m2 = b.instanceMethods.firstWhere((m) => m.name == 'm2');
+      var sometimes = m2.allParameters.firstWhere((p) => p.name == 'sometimes');
+      var optionals = m2.allParameters.firstWhere((p) => p.name == 'optionals');
+      expect(sometimes.isRequiredNamed, isFalse);
+      expect(sometimes.isRequiredPositional, isTrue);
+      expect(sometimes.isOptionalPositional, isFalse);
+      expect(optionals.isRequiredNamed, isFalse);
+      expect(optionals.isRequiredPositional, isFalse);
+      expect(optionals.isOptionalPositional, isTrue);
+
+      expect(
+          m2.linkedParamsLines,
+          equals(
+              '<ol class="parameter-list"><li><span class="parameter" id="m2-param-sometimes"><span class="type-annotation">int</span> <span class="parameter-name">sometimes</span>, </span></li>\n'
+              '<li><span class="parameter" id="m2-param-we"><span class="type-annotation">dynamic</span> <span class="parameter-name">we</span>, </span></li>\n'
+              '<li><span class="parameter" id="m2-param-have">[<span class="type-annotation">String</span> <span class="parameter-name">have</span>, </span></li>\n'
+              '<li><span class="parameter" id="m2-param-optionals"><span class="type-annotation">double</span> <span class="parameter-name">optionals</span>]</span></li>\n'
+              '</ol>'));
+    });
+
+    test('anonymous callback parameters are correctly marked as nullable', () {
+      var m3 = c.instanceMethods.firstWhere((m) => m.name == 'm3');
+      var listen = m3.allParameters.firstWhere((p) => p.name == 'listen');
+      var onDone = m3.allParameters.firstWhere((p) => p.name == 'onDone');
+      expect(listen.isRequiredPositional, isTrue);
+      expect(onDone.isNamed, isTrue);
+
+      expect(
+          m3.linkedParamsLines,
+          equals(
+              '<ol class="parameter-list"><li><span class="parameter" id="m3-param-listen"><span class="type-annotation">void</span> <span class="parameter-name">listen</span>(<ol class="parameter-list"><li><span class="parameter" id="param-t"><span class="type-annotation">int</span> <span class="parameter-name">t</span></span></li>\n'
+              '</ol>\n'
+              ')?, </span></li>\n'
+              '<li><span class="parameter" id="m3-param-onDone">{<span class="type-annotation">void</span> <span class="parameter-name">onDone</span>(<ol class="parameter-list"></ol>\n'
+              ')?}</span></li>\n'
+              '</ol>'));
+    });
+
+    test('Late final class member test', () {
+      var c = lateFinalWithoutInitializer.allClasses
+          .firstWhere((c) => c.name == 'C');
+      var a = c.instanceFields.firstWhere((f) => f.name == 'a');
+      var b = c.instanceFields.firstWhere((f) => f.name == 'b');
+      var cField = c.instanceFields.firstWhere((f) => f.name == 'cField');
+      var dField = c.instanceFields.firstWhere((f) => f.name == 'dField');
+
+      // If Null safety isn't enabled, fields named 'late' come back from the
+      // analyzer instead of setting up 'isLate'.
+      expect(c.instanceFields.any((f) => f.name == 'late'), isFalse);
+
+      expect(a.modelType.name, equals('dynamic'));
+      expect(a.isLate, isTrue);
+      expect(a.features, contains(Feature.lateFeature));
+
+      expect(b.modelType.name, equals('int'));
+      expect(b.isLate, isTrue);
+      expect(b.features, contains(Feature.lateFeature));
+
+      expect(cField.modelType.name, equals('dynamic'));
+      expect(cField.isLate, isTrue);
+      expect(cField.features, contains(Feature.lateFeature));
+
+      expect(dField.modelType.name, equals('double'));
+      expect(dField.isLate, isTrue);
+      expect(dField.features, contains(Feature.lateFeature));
+    });
+
+    test('Late final top level variables', () {
+      var initializeMe = lateFinalWithoutInitializer.publicProperties
+          .firstWhere((v) => v.name == 'initializeMe');
+      expect(initializeMe.modelType.name, equals('String'));
+      expect(initializeMe.isLate, isTrue);
+      expect(initializeMe.features, contains(Feature.lateFeature));
+    });
+
+    test('Opt out of Null safety', () {
+      var notOptedIn = optOutOfNullSafety.publicProperties
+          .firstWhere((v) => v.name == 'notOptedIn');
+      expect(notOptedIn.isNullSafety, isFalse);
+      expect(notOptedIn.modelType.nullabilitySuffix, isEmpty);
+    });
+
+    test('complex nullable elements are detected and rendered correctly', () {
+      var complexNullableMembers = nullableElements.allClasses
+          .firstWhere((c) => c.name == 'ComplexNullableMembers');
+      var aComplexType = complexNullableMembers.allFields
+          .firstWhere((f) => f.name == 'aComplexType');
+      var aComplexSetterOnlyType = complexNullableMembers.allFields
+          .firstWhere((f) => f.name == 'aComplexSetterOnlyType');
+      expect(complexNullableMembers.isNullSafety, isTrue);
+      expect(
+          complexNullableMembers.nameWithGenerics,
+          equals(
+              'ComplexNullableMembers&lt;<wbr><span class=\"type-parameter\">T extends String?</span>&gt;'));
+      expect(
+          aComplexType.modelType.linkedName,
+          equals(
+              'Map<span class="signature">&lt;<wbr><span class="type-parameter">T?</span>, <span class="type-parameter">String?</span>&gt;</span>'));
+      expect(
+          aComplexSetterOnlyType.modelType.linkedName,
+          equals(
+              'List<span class="signature">&lt;<wbr><span class="type-parameter">Map<span class="signature">&lt;<wbr><span class="type-parameter">T?</span>, <span class="type-parameter">String?</span>&gt;</span>?</span>&gt;</span>'));
+    });
+
+    test('simple nullable elements are detected and rendered correctly', () {
+      var nullableMembers = nullableElements.allClasses
+          .firstWhere((c) => c.name == 'NullableMembers');
+      var initialized =
+          nullableMembers.allFields.firstWhere((f) => f.name == 'initialized');
+      var nullableField = nullableMembers.allFields
+          .firstWhere((f) => f.name == 'nullableField');
+      var methodWithNullables = nullableMembers.publicInstanceMethods
+          .firstWhere((f) => f.name == 'methodWithNullables');
+      var operatorStar = nullableMembers.publicInstanceOperators
+          .firstWhere((f) => f.name == 'operator *');
+      expect(nullableMembers.isNullSafety, isTrue);
+      expect(
+          nullableField.modelType.linkedName,
+          equals(
+              'Iterable<span class=\"signature\">&lt;<wbr><span class=\"type-parameter\">BigInt</span>&gt;</span>?'));
+      expect(
+          methodWithNullables.linkedParams,
+          equals(
+              '<span class="parameter" id="methodWithNullables-param-foo"><span class="type-annotation">String?</span> <span class="parameter-name">foo</span></span>'));
+      expect(
+          methodWithNullables.modelType.returnType.linkedName, equals('int?'));
+      expect(
+          initialized.modelType.linkedName,
+          equals(
+              'Map<span class="signature">&lt;<wbr><span class="type-parameter">String</span>, <span class="type-parameter">Map</span>&gt;</span>?'));
+      expect(
+          operatorStar.linkedParams,
+          equals(
+              '<span class="parameter" id="*-param-nullableOther"><span class="type-annotation"><a href="%%__HTMLBASE_dartdoc_internal__%%nullable_elements/NullableMembers-class.html">NullableMembers</a>?</span> <span class="parameter-name">nullableOther</span></span>'));
+    });
+  });
+
   group('Set Literals', () {
     Library set_literals;
     TopLevelVariable aComplexSet,
@@ -113,25 +327,44 @@ void main() {
 
     test('Set literals test', () {
       expect(aComplexSet.modelType.name, equals('Set'));
-      expect(aComplexSet.modelType.typeArguments.map((a) => a.name).toList(),
+      expect(
+          (aComplexSet.modelType as ParameterizedElementType)
+              .typeArguments
+              .map((a) => a.name)
+              .toList(),
           equals(['AClassContainingLiterals']));
       expect(aComplexSet.constantValue,
           equals('const {const AClassContainingLiterals(3, 5)}'));
       expect(inferredTypeSet.modelType.name, equals('Set'));
       expect(
-          inferredTypeSet.modelType.typeArguments.map((a) => a.name).toList(),
-          equals(['num']));
-      expect(inferredTypeSet.constantValue, equals('const {1, 2.5, 3}'));
+          (inferredTypeSet.modelType as ParameterizedElementType)
+              .typeArguments
+              .map((a) => a.name)
+              .toList(),
+          equals(['int']));
+      expect(inferredTypeSet.constantValue, equals('const {1, 3, 5}'));
       expect(specifiedSet.modelType.name, equals('Set'));
-      expect(specifiedSet.modelType.typeArguments.map((a) => a.name).toList(),
+      expect(
+          (specifiedSet.modelType as ParameterizedElementType)
+              .typeArguments
+              .map((a) => a.name)
+              .toList(),
           equals(['int']));
       expect(specifiedSet.constantValue, equals('const {}'));
       expect(untypedMap.modelType.name, equals('Map'));
-      expect(untypedMap.modelType.typeArguments.map((a) => a.name).toList(),
+      expect(
+          (untypedMap.modelType as ParameterizedElementType)
+              .typeArguments
+              .map((a) => a.name)
+              .toList(),
           equals(['dynamic', 'dynamic']));
       expect(untypedMap.constantValue, equals('const {}'));
       expect(typedSet.modelType.name, equals('Set'));
-      expect(typedSet.modelType.typeArguments.map((a) => a.name).toList(),
+      expect(
+          (typedSet.modelType as ParameterizedElementType)
+              .typeArguments
+              .map((a) => a.name)
+              .toList(),
           equals(['String']));
       expect(typedSet.constantValue,
           matches(RegExp(r'const &lt;String&gt;\s?{}')));
@@ -264,11 +497,11 @@ void main() {
       expect(
           invokeTool.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/ToolUser-class.html">ToolUser</a>'));
+              '<a href="${htmlBasePlaceholder}ex/ToolUser-class.html">ToolUser</a>'));
       expect(
           invokeTool.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/Dog-class.html">Dog</a>'));
+              '<a href="${htmlBasePlaceholder}ex/Dog-class.html">Dog</a>'));
     });
     test(r'can invoke a tool with no $INPUT or args', () {
       expect(invokeToolNoInput.documentation, contains('Args: []'));
@@ -278,7 +511,7 @@ void main() {
       expect(
           invokeToolNoInput.documentationAsHtml,
           isNot(contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/Dog-class.html">Dog</a>')));
+              '<a href="${htmlBasePlaceholder}ex/Dog-class.html">Dog</a>')));
     });
     test('can invoke a tool multiple times in one comment block', () {
       var envLine = RegExp(r'^Env: \{', multiLine: true);
@@ -367,28 +600,28 @@ void main() {
       expect(
           renderer.renderCategoryLabel(category),
           '<span class="category superb cp-0 linked" title="This is part of the Superb Topic.">'
-          '<a href="${HTMLBASE_PLACEHOLDER}topics/Superb-topic.html">Superb</a></span>');
+          '<a href="${htmlBasePlaceholder}topics/Superb-topic.html">Superb</a></span>');
     });
 
     test('CategoryRendererHtml renders linkedName', () {
       var category = packageGraph.publicPackages.first.categories.first;
       var renderer = CategoryRendererHtml();
       expect(renderer.renderLinkedName(category),
-          '<a href="${HTMLBASE_PLACEHOLDER}topics/Superb-topic.html">Superb</a>');
+          '<a href="${htmlBasePlaceholder}topics/Superb-topic.html">Superb</a>');
     });
 
     test('CategoryRendererMd renders category label', () {
       var category = packageGraph.publicPackages.first.categories.first;
       var renderer = CategoryRendererMd();
       expect(renderer.renderCategoryLabel(category),
-          '[Superb](${HTMLBASE_PLACEHOLDER}topics/Superb-topic.html)');
+          '[Superb](${htmlBasePlaceholder}topics/Superb-topic.html)');
     });
 
     test('CategoryRendererMd renders linkedName', () {
       var category = packageGraph.publicPackages.first.categories.first;
       var renderer = CategoryRendererMd();
       expect(renderer.renderLinkedName(category),
-          '[Superb](${HTMLBASE_PLACEHOLDER}topics/Superb-topic.html)');
+          '[Superb](${htmlBasePlaceholder}topics/Superb-topic.html)');
     });
   });
 
@@ -852,14 +1085,14 @@ void main() {
       test('Verify links inside of table headers', () {
         expect(
             docsAsHtml.contains(
-                '<th><a href="${HTMLBASE_PLACEHOLDER}fake/Annotation-class.html">Annotation</a></th>'),
+                '<th><a href="${htmlBasePlaceholder}fake/Annotation-class.html">Annotation</a></th>'),
             isTrue);
       });
 
       test('Verify links inside of table body', () {
         expect(
             docsAsHtml.contains(
-                '<tbody><tr><td><a href="${HTMLBASE_PLACEHOLDER}fake/DocumentWithATable/foo-constant.html">foo</a></td>'),
+                '<tbody><tr><td><a href="${htmlBasePlaceholder}fake/DocumentWithATable/foo-constant.html">foo</a></td>'),
             isTrue);
       });
 
@@ -898,18 +1131,18 @@ void main() {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/ImplicitProperties/forInheriting.html">ClassWithUnusualProperties.forInheriting</a>'));
+                '<a href="${htmlBasePlaceholder}fake/ImplicitProperties/forInheriting.html">ClassWithUnusualProperties.forInheriting</a>'));
         expect(
             docsAsHtml,
             contains(
                 '<a href="%%__HTMLBASE_dartdoc_internal__%%reexport_two/BaseReexported/action.html">ExtendedBaseReexported.action</a></p>'));
         var doAwesomeStuffWarnings = packageGraph.packageWarningCounter
                 .countedWarnings[doAwesomeStuff.element] ??
-            [];
+            {};
         expect(
             doAwesomeStuffWarnings,
-            isNot(anyElement((Tuple2<PackageWarning, String> e) =>
-                e.item1 == PackageWarning.ambiguousDocReference)));
+            isNot(doAwesomeStuffWarnings
+                .containsKey(PackageWarning.ambiguousDocReference)));
       });
 
       test('can handle renamed imports', () {
@@ -918,49 +1151,49 @@ void main() {
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to library: <a href="${HTMLBASE_PLACEHOLDER}mylibpub/mylibpub-library.html">renamedLib</a>'));
+                'Link to library: <a href="${htmlBasePlaceholder}mylibpub/mylibpub-library.html">renamedLib</a>'));
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to constructor (implied): <a href="${HTMLBASE_PLACEHOLDER}mylibpub/YetAnotherHelper/YetAnotherHelper.html">new renamedLib.YetAnotherHelper()</a>'));
+                'Link to constructor (implied): <a href="${htmlBasePlaceholder}mylibpub/YetAnotherHelper/YetAnotherHelper.html">new renamedLib.YetAnotherHelper()</a>'));
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to constructor (implied, no new): <a href="${HTMLBASE_PLACEHOLDER}mylibpub/YetAnotherHelper/YetAnotherHelper.html">renamedLib.YetAnotherHelper()</a>'));
+                'Link to constructor (implied, no new): <a href="${htmlBasePlaceholder}mylibpub/YetAnotherHelper/YetAnotherHelper.html">renamedLib.YetAnotherHelper()</a>'));
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to class: <a href="${HTMLBASE_PLACEHOLDER}mylibpub/YetAnotherHelper-class.html">renamedLib.YetAnotherHelper</a>'));
+                'Link to class: <a href="${htmlBasePlaceholder}mylibpub/YetAnotherHelper-class.html">renamedLib.YetAnotherHelper</a>'));
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to constructor (direct): <a href="${HTMLBASE_PLACEHOLDER}mylibpub/YetAnotherHelper/YetAnotherHelper.html">renamedLib.YetAnotherHelper.YetAnotherHelper</a>'));
+                'Link to constructor (direct): <a href="${htmlBasePlaceholder}mylibpub/YetAnotherHelper/YetAnotherHelper.html">renamedLib.YetAnotherHelper.YetAnotherHelper</a>'));
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to class member: <a href="${HTMLBASE_PLACEHOLDER}mylibpub/YetAnotherHelper/getMoreContents.html">renamedLib.YetAnotherHelper.getMoreContents</a>'));
+                'Link to class member: <a href="${htmlBasePlaceholder}mylibpub/YetAnotherHelper/getMoreContents.html">renamedLib.YetAnotherHelper.getMoreContents</a>'));
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to function: <a href="${HTMLBASE_PLACEHOLDER}mylibpub/helperFunction.html">renamedLib.helperFunction</a>'));
+                'Link to function: <a href="${htmlBasePlaceholder}mylibpub/helperFunction.html">renamedLib.helperFunction</a>'));
         expect(
             aFunctionUsingRenamedLib.documentationAsHtml,
             contains(
-                'Link to overlapping prefix: <a href="${HTMLBASE_PLACEHOLDER}csspub/theOnlyThingInTheLibrary.html">renamedLib2.theOnlyThingInTheLibrary</a>'));
+                'Link to overlapping prefix: <a href="${htmlBasePlaceholder}csspub/theOnlyThingInTheLibrary.html">renamedLib2.theOnlyThingInTheLibrary</a>'));
       });
 
       test('operator [] reference within a class works', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/BaseForDocComments/operator_get.html">operator []</a> '));
+                '<a href="${htmlBasePlaceholder}fake/BaseForDocComments/operator_get.html">operator []</a> '));
       });
 
       test('operator [] reference outside of a class works', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/SpecialList/operator_get.html">SpecialList.operator []</a> '));
+                '<a href="${htmlBasePlaceholder}fake/SpecialList/operator_get.html">SpecialList.operator []</a> '));
       }, skip: 'https://github.com/dart-lang/dartdoc/issues/1285');
 
       test('adds <code> tag to a class from the SDK', () {
@@ -975,7 +1208,7 @@ void main() {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/BaseForDocComments-class.html">BaseForDocComments</a>'));
+                '<a href="${htmlBasePlaceholder}fake/BaseForDocComments-class.html">BaseForDocComments</a>'));
       });
 
       test(
@@ -984,7 +1217,7 @@ void main() {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}anonymous_library/doesStuff.html">doesStuff</a>'));
+                '<a href="${htmlBasePlaceholder}anonymous_library/doesStuff.html">doesStuff</a>'));
       });
 
       test(
@@ -995,11 +1228,11 @@ void main() {
         expect(
             helperClass.documentationAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}ex/Apple-class.html">Apple</a>'));
+                '<a href="${htmlBasePlaceholder}ex/Apple-class.html">Apple</a>'));
         expect(
             helperClass.documentationAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}ex/B-class.html">ex.B</a>'));
+                '<a href="${htmlBasePlaceholder}ex/B-class.html">ex.B</a>'));
       });
 
       test('link to override method in implementer from base class', () {
@@ -1008,7 +1241,7 @@ void main() {
         expect(
             helperClass.documentationAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}override_class/BoxConstraints/debugAssertIsValid.html">BoxConstraints.debugAssertIsValid</a>'));
+                '<a href="${htmlBasePlaceholder}override_class/BoxConstraints/debugAssertIsValid.html">BoxConstraints.debugAssertIsValid</a>'));
       });
 
       test(
@@ -1017,7 +1250,7 @@ void main() {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}two_exports/BaseClass-class.html">BaseClass</a>'));
+                '<a href="${htmlBasePlaceholder}two_exports/BaseClass-class.html">BaseClass</a>'));
       });
 
       test(
@@ -1026,35 +1259,35 @@ void main() {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/NAME_WITH_TWO_UNDERSCORES-constant.html">NAME_WITH_TWO_UNDERSCORES</a>'));
+                '<a href="${htmlBasePlaceholder}fake/NAME_WITH_TWO_UNDERSCORES-constant.html">NAME_WITH_TWO_UNDERSCORES</a>'));
       });
 
       test('links to a method in this class', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/BaseForDocComments/anotherMethod.html">anotherMethod</a>'));
+                '<a href="${htmlBasePlaceholder}fake/BaseForDocComments/anotherMethod.html">anotherMethod</a>'));
       });
 
       test('links to a top-level function in this library', () {
         expect(
             docsAsHtml,
             contains(
-                '<a class="deprecated" href="${HTMLBASE_PLACEHOLDER}fake/topLevelFunction.html">topLevelFunction</a>'));
+                '<a class="deprecated" href="${htmlBasePlaceholder}fake/topLevelFunction.html">topLevelFunction</a>'));
       });
 
       test('links to top-level function from an imported library', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}ex/function1.html">function1</a>'));
+                '<a href="${htmlBasePlaceholder}ex/function1.html">function1</a>'));
       });
 
       test('links to a class from an imported lib', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}ex/Apple-class.html">Apple</a>'));
+                '<a href="${htmlBasePlaceholder}ex/Apple-class.html">Apple</a>'));
       });
 
       test(
@@ -1063,14 +1296,14 @@ void main() {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/incorrectDocReference-constant.html">incorrectDocReference</a>'));
+                '<a href="${htmlBasePlaceholder}fake/incorrectDocReference-constant.html">incorrectDocReference</a>'));
       });
 
       test('links to a top-level const from an imported lib', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}ex/incorrectDocReferenceFromEx-constant.html">incorrectDocReferenceFromEx</a>'));
+                '<a href="${htmlBasePlaceholder}ex/incorrectDocReferenceFromEx-constant.html">incorrectDocReferenceFromEx</a>'));
       });
 
       test('links to a top-level variable with a prefix from an imported lib',
@@ -1078,32 +1311,26 @@ void main() {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}csspub/theOnlyThingInTheLibrary.html">css.theOnlyThingInTheLibrary</a>'));
+                '<a href="${htmlBasePlaceholder}csspub/theOnlyThingInTheLibrary.html">css.theOnlyThingInTheLibrary</a>'));
       });
 
       test('links to a name with a single underscore', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/NAME_SINGLEUNDERSCORE-constant.html">NAME_SINGLEUNDERSCORE</a>'));
+                '<a href="${htmlBasePlaceholder}fake/NAME_SINGLEUNDERSCORE-constant.html">NAME_SINGLEUNDERSCORE</a>'));
       });
 
       test('correctly escapes type parameters in links', () {
         expect(
             docsAsHtml,
             contains(
-                '<a href="${HTMLBASE_PLACEHOLDER}fake/ExtraSpecialList-class.html">ExtraSpecialList&lt;Object&gt;</a>'));
+                '<a href="${htmlBasePlaceholder}fake/ExtraSpecialList-class.html">ExtraSpecialList&lt;Object&gt;</a>'));
       });
 
       test('correctly escapes type parameters in broken links', () {
         expect(docsAsHtml,
             contains('<code>ThisIsNotHereNoWay&lt;MyType&gt;</code>'));
-      });
-
-      test('leaves relative href resulting in a broken link', () {
-        // Dartdoc does emit a brokenLink warning for this.
-        expect(docsAsHtml,
-            contains('<a href="SubForDocComments/localMethod.html">link</a>'));
       });
 
       test('leaves relative href resulting in a working link', () {
@@ -1121,7 +1348,7 @@ void main() {
       expect(
           short.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/NAME_WITH_TWO_UNDERSCORES-constant.html">NAME_WITH_TWO_UNDERSCORES</a>'));
+              '<a href="${htmlBasePlaceholder}fake/NAME_WITH_TWO_UNDERSCORES-constant.html">NAME_WITH_TWO_UNDERSCORES</a>'));
     });
 
     test('still has brackets inside code blocks', () {
@@ -1172,7 +1399,7 @@ void main() {
     test('single ref to class', () {
       expect(
           B.documentationAsHtml.contains(
-              '<p>Extends class <a href="${HTMLBASE_PLACEHOLDER}ex/Apple-class.html">Apple</a>, use <a href="${HTMLBASE_PLACEHOLDER}ex/Apple/Apple.html">new Apple</a> or <a href="${HTMLBASE_PLACEHOLDER}ex/Apple/Apple.fromString.html">new Apple.fromString</a></p>'),
+              '<p>Extends class <a href="${htmlBasePlaceholder}ex/Apple-class.html">Apple</a>, use <a href="${htmlBasePlaceholder}ex/Apple/Apple.html">new Apple</a> or <a href="${htmlBasePlaceholder}ex/Apple/Apple.fromString.html">new Apple.fromString</a></p>'),
           isTrue);
     });
 
@@ -1191,11 +1418,11 @@ void main() {
       expect(
           resolved,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}two_exports/BaseClass-class.html">BaseClass</a>'));
+              '<a href="${htmlBasePlaceholder}two_exports/BaseClass-class.html">BaseClass</a>'));
       expect(
           resolved,
           contains(
-              'Linking over to <a href="${HTMLBASE_PLACEHOLDER}ex/Apple-class.html">Apple</a>'));
+              'Linking over to <a href="${htmlBasePlaceholder}ex/Apple-class.html">Apple</a>'));
     });
 
     test('references to class and constructors', () {
@@ -1203,15 +1430,15 @@ void main() {
       expect(
           comment,
           contains(
-              'Extends class <a href="${HTMLBASE_PLACEHOLDER}ex/Apple-class.html">Apple</a>'));
+              'Extends class <a href="${htmlBasePlaceholder}ex/Apple-class.html">Apple</a>'));
       expect(
           comment,
           contains(
-              'use <a href="${HTMLBASE_PLACEHOLDER}ex/Apple/Apple.html">new Apple</a>'));
+              'use <a href="${htmlBasePlaceholder}ex/Apple/Apple.html">new Apple</a>'));
       expect(
           comment,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/Apple/Apple.fromString.html">new Apple.fromString</a>'));
+              '<a href="${htmlBasePlaceholder}ex/Apple/Apple.fromString.html">new Apple.fromString</a>'));
     });
 
     test('references to nullable type and null-checked variable', () {
@@ -1221,11 +1448,11 @@ void main() {
       expect(
           comment,
           contains(
-              'nullable type: <a href="${HTMLBASE_PLACEHOLDER}ex/Apple-class.html">Apple?</a>'));
+              'nullable type: <a href="${htmlBasePlaceholder}ex/Apple-class.html">Apple?</a>'));
       expect(
           comment,
           contains(
-              'null-checked variable <a href="${HTMLBASE_PLACEHOLDER}ex/myNumber.html">myNumber!</a>'));
+              'null-checked variable <a href="${htmlBasePlaceholder}ex/myNumber.html">myNumber!</a>'));
     });
 
     test('reference to constructor named the same as a field', () {
@@ -1235,7 +1462,7 @@ void main() {
       expect(
           comment,
           contains('Reference to '
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/FieldAndCtorWithSameName/FieldAndCtorWithSameName.named.html">'
+              '<a href="${htmlBasePlaceholder}ex/FieldAndCtorWithSameName/FieldAndCtorWithSameName.named.html">'
               'FieldAndCtorWithSameName.named()</a>'));
     });
 
@@ -1244,7 +1471,7 @@ void main() {
       expect(
           comment,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/Apple-class.html">Apple</a>'));
+              '<a href="${htmlBasePlaceholder}ex/Apple-class.html">Apple</a>'));
     });
 
     test('reference to method', () {
@@ -1252,7 +1479,7 @@ void main() {
       expect(
           comment,
           equals(
-              '<p>link to method from class <a href="${HTMLBASE_PLACEHOLDER}ex/Apple/m.html">Apple.m</a></p>'));
+              '<p>link to method from class <a href="${htmlBasePlaceholder}ex/Apple/m.html">Apple.m</a></p>'));
     });
 
     test(
@@ -1265,11 +1492,11 @@ void main() {
       expect(
           notAMethodFromPrivateClass.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/InheritingClassOne/aMethod.html">fake.InheritingClassOne.aMethod</a>'));
+              '<a href="${htmlBasePlaceholder}fake/InheritingClassOne/aMethod.html">fake.InheritingClassOne.aMethod</a>'));
       expect(
           notAMethodFromPrivateClass.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/InheritingClassTwo/aMethod.html">fake.InheritingClassTwo.aMethod</a>'));
+              '<a href="${htmlBasePlaceholder}fake/InheritingClassTwo/aMethod.html">fake.InheritingClassTwo.aMethod</a>'));
     });
 
     test('legacy code blocks render correctly', () {
@@ -1313,6 +1540,30 @@ void main() {
   });
 
   group('Class edge cases', () {
+    // This is distinct from inheritance in the language and the analyzer
+    // implementation.
+    test(
+        'Implementor chain is correctly rewritten through intermediate private classes',
+        () {
+      var implementorsLibrary = packageGraph.publicLibraries
+          .firstWhere((l) => l.name == 'implementors');
+      var ImplementerOfDeclaredPrivateClasses = implementorsLibrary.classes
+          .firstWhere((c) => c.name == 'ImplementerOfDeclaredPrivateClasses');
+      var ImplementerOfThings = implementorsLibrary.classes
+          .firstWhere((c) => c.name == 'ImplementerOfThings');
+      var ImplementBase = implementorsLibrary.classes
+          .firstWhere((c) => c.name == 'ImplementBase');
+
+      expect(ImplementerOfThings.publicInterfaces.first.element,
+          equals(ImplementBase));
+      expect(ImplementerOfDeclaredPrivateClasses.publicInterfaces.first.element,
+          equals(ImplementBase));
+
+      expect(ImplementBase.publicImplementors,
+          contains(ImplementerOfDeclaredPrivateClasses));
+      expect(ImplementBase.publicImplementors, contains(ImplementerOfThings));
+    });
+
     test('Overrides from intermediate abstract classes are picked up correctly',
         () {
       var IntermediateAbstractSubclass = fakeLibrary.allClasses
@@ -1479,35 +1730,35 @@ void main() {
       expect(
           overrideByModifierClass.oneLineDoc,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ModifierClass-class.html">ModifierClass</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ModifierClass-class.html">ModifierClass</a>'));
       expect(
           overrideByModifierClass.canonicalModelElement.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ModifierClass-class.html">ModifierClass</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ModifierClass-class.html">ModifierClass</a>'));
       expect(
           overrideByGenericMixin.oneLineDoc,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/GenericMixin-mixin.html">GenericMixin</a>'));
+              '<a href="${htmlBasePlaceholder}fake/GenericMixin-mixin.html">GenericMixin</a>'));
       expect(
           overrideByGenericMixin.canonicalModelElement.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/GenericMixin-mixin.html">GenericMixin</a>'));
+              '<a href="${htmlBasePlaceholder}fake/GenericMixin-mixin.html">GenericMixin</a>'));
       expect(
           overrideByBoth.oneLineDoc,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ModifierClass-class.html">ModifierClass</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ModifierClass-class.html">ModifierClass</a>'));
       expect(
           overrideByBoth.oneLineDoc,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/GenericMixin-mixin.html">GenericMixin</a>'));
+              '<a href="${htmlBasePlaceholder}fake/GenericMixin-mixin.html">GenericMixin</a>'));
       expect(
           overrideByBoth.canonicalModelElement.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ModifierClass-class.html">ModifierClass</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ModifierClass-class.html">ModifierClass</a>'));
       expect(
           overrideByBoth.canonicalModelElement.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/GenericMixin-mixin.html">GenericMixin</a>'));
+              '<a href="${htmlBasePlaceholder}fake/GenericMixin-mixin.html">GenericMixin</a>'));
     });
   });
 
@@ -1666,22 +1917,23 @@ void main() {
 
     test('exported class should have hrefs from the current library', () {
       expect(
-          Dep.href, equals('${HTMLBASE_PLACEHOLDER}ex/Deprecated-class.html'));
+          Dep.href, equals('${htmlBasePlaceholder}ex/Deprecated-class.html'));
       expect(Dep.instanceMethods.firstWhere((m) => m.name == 'toString').href,
-          equals('${HTMLBASE_PLACEHOLDER}ex/Deprecated/toString.html'));
+          equals('${htmlBasePlaceholder}ex/Deprecated/toString.html'));
       expect(Dep.instanceFields.firstWhere((m) => m.name == 'expires').href,
-          equals('${HTMLBASE_PLACEHOLDER}ex/Deprecated/expires.html'));
+          equals('${htmlBasePlaceholder}ex/Deprecated/expires.html'));
     });
 
-    test('exported class should have linkedReturnType for the current library',
+    test(
+        'exported class should have modelType.returnType.linkedName for the current library',
         () {
       var returnCool = Cool.instanceMethods
           .firstWhere((m) => m.name == 'returnCool', orElse: () => null);
       expect(returnCool, isNotNull);
       expect(
-          returnCool.linkedReturnType,
+          returnCool.modelType.returnType.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/Cool-class.html">Cool</a>'));
+              '<a href="${htmlBasePlaceholder}fake/Cool-class.html">Cool</a>'));
     });
 
     test('F has a single instance method', () {
@@ -1964,15 +2216,15 @@ void main() {
       expect(
           extensionReferencer.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/FancyList.html">FancyList</a>'));
+              '<a href="${htmlBasePlaceholder}ex/FancyList.html">FancyList</a>'));
       expect(
           extensionReferencer.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/AnExtension/call.html">AnExtension.call</a>'));
+              '<a href="${htmlBasePlaceholder}ex/AnExtension/call.html">AnExtension.call</a>'));
       expect(
           extensionReferencer.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}reexport_two/DocumentThisExtensionOnce.html">DocumentThisExtensionOnce</a>'));
+              '<a href="${htmlBasePlaceholder}reexport_two/DocumentThisExtensionOnce.html">DocumentThisExtensionOnce</a>'));
     });
 
     test('has a fully qualified name', () {
@@ -1989,7 +2241,7 @@ void main() {
 
     test('member method has href', () {
       s = ext.instanceMethods.firstWhere((m) => m.name == 's');
-      expect(s.href, '${HTMLBASE_PLACEHOLDER}ex/AppleExtension/s.html');
+      expect(s.href, '${htmlBasePlaceholder}ex/AppleExtension/s.html');
     });
 
     test('has extended type', () {
@@ -2181,7 +2433,7 @@ void main() {
 
     test('async function', () {
       expect(thisIsAsync.isAsynchronous, isTrue);
-      expect(thisIsAsync.linkedReturnType, equals('Future'));
+      expect(thisIsAsync.modelType.returnType.linkedName, equals('Future'));
       expect(
           thisIsAsync.documentation,
           equals(
@@ -2194,13 +2446,14 @@ void main() {
 
     test('function returning FutureOr', () {
       expect(thisIsFutureOr.isAsynchronous, isFalse);
-      expect(thisIsFutureOr.linkedReturnType, equals('FutureOr'));
+      expect(
+          thisIsFutureOr.modelType.returnType.linkedName, equals('FutureOr'));
     });
 
     test('function returning FutureOr<Null>', () {
       expect(thisIsFutureOrNull.isAsynchronous, isFalse);
       expect(
-          thisIsFutureOrNull.linkedReturnType,
+          thisIsFutureOrNull.modelType.returnType.linkedName,
           equals(
               'FutureOr<span class="signature">&lt;<wbr><span class="type-parameter">Null</span>&gt;</span>'));
     });
@@ -2208,7 +2461,7 @@ void main() {
     test('function returning FutureOr<T>', () {
       expect(thisIsFutureOrNull.isAsynchronous, isFalse);
       expect(
-          thisIsFutureOrT.linkedReturnType,
+          thisIsFutureOrT.modelType.returnType.linkedName,
           equals(
               'FutureOr<span class="signature">&lt;<wbr><span class="type-parameter">T</span>&gt;</span>'));
     });
@@ -2260,7 +2513,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           params,
           '<span class="parameter" id="addCallback-param-callback">'
-          '<span class="type-annotation"><a href="${HTMLBASE_PLACEHOLDER}fake/VoidCallback.html">VoidCallback</a></span> '
+          '<span class="type-annotation"><a href="${htmlBasePlaceholder}fake/VoidCallback.html">VoidCallback</a></span> '
           '<span class="parameter-name">callback</span></span>');
 
       function =
@@ -2269,7 +2522,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           params,
           '<span class="parameter" id="addCallback2-param-callback">'
-          '<span class="type-annotation"><a href="${HTMLBASE_PLACEHOLDER}fake/Callback2.html">Callback2</a></span> '
+          '<span class="type-annotation"><a href="${htmlBasePlaceholder}fake/Callback2.html">Callback2</a></span> '
           '<span class="parameter-name">callback</span></span>');
     });
 
@@ -2306,25 +2559,22 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
           .singleWhere((f) => f.name == 'explicitSetter');
       // TODO(jcollins-g): really, these shouldn't be called "parameters" in
       // the span class.
-      expect(
-          explicitSetter.linkedReturnType,
-          '<span class="parameter" id="explicitSetter=-param-f"><span class="type-annotation">dynamic</span> <span class="parameter-name">Function</span>(<span class="parameter" id="param-bar"><span class="type-annotation">int</span>, </span>'
-          '<span class="parameter" id="param-baz"><span class="type-annotation"><a href="${HTMLBASE_PLACEHOLDER}fake/Cool-class.html">Cool</a></span>, </span>'
-          '<span class="parameter" id="param-macTruck"><span class="type-annotation">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span></span>)</span>');
+      expect(explicitSetter.modelType.linkedName,
+          'dynamic Function<span class="signature">(<span class="parameter" id="param-bar"><span class="type-annotation">int</span> <span class="parameter-name">bar</span>, </span><span class="parameter" id="param-baz"><span class="type-annotation"><a href="%%__HTMLBASE_dartdoc_internal__%%fake/Cool-class.html">Cool</a></span> <span class="parameter-name">baz</span>, </span><span class="parameter" id="param-macTruck"><span class="type-annotation">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span> <span class="parameter-name">macTruck</span></span>)</span>');
     });
 
     test('parameterized type from field is correctly displayed', () {
       var aField = TemplatedInterface.instanceFields
           .singleWhere((f) => f.name == 'aField');
-      expect(aField.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">Stream<span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span></span>&gt;</span>');
+      expect(aField.modelType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">Stream<span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span></span>&gt;</span>');
     });
 
     test('parameterized type from inherited field is correctly displayed', () {
       var aInheritedField = TemplatedInterface.inheritedFields
           .singleWhere((f) => f.name == 'aInheritedField');
-      expect(aInheritedField.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
+      expect(aInheritedField.modelType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
     });
 
     test(
@@ -2333,8 +2583,8 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       Accessor aGetter = TemplatedInterface.instanceFields
           .singleWhere((f) => f.name == 'aGetter')
           .getter;
-      expect(aGetter.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">Map<span class="signature">&lt;<wbr><span class="type-parameter">A</span>, <span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">String</span>&gt;</span></span>&gt;</span></span>&gt;</span>');
+      expect(aGetter.modelType.returnType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">Map<span class="signature">&lt;<wbr><span class="type-parameter">A</span>, <span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">String</span>&gt;</span></span>&gt;</span></span>&gt;</span>');
     });
 
     test(
@@ -2343,8 +2593,8 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       Accessor aInheritedGetter = TemplatedInterface.inheritedFields
           .singleWhere((f) => f.name == 'aInheritedGetter')
           .getter;
-      expect(aInheritedGetter.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
+      expect(aInheritedGetter.modelType.returnType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
     });
 
     test(
@@ -2354,11 +2604,9 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
           .singleWhere((f) => f.name == 'aInheritedSetter')
           .setter;
       expect(aInheritedSetter.allParameters.first.modelType.linkedName,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
-      // TODO(jcollins-g): really, these shouldn't be called "parameters" in
-      // the span class.
-      expect(aInheritedSetter.enclosingCombo.linkedReturnType,
-          '<span class="parameter" id="aInheritedSetter=-param-thingToSet"><span class="type-annotation"><a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span></span></span>');
+          '<a href="${htmlBasePlaceholder}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
+      expect(aInheritedSetter.enclosingCombo.modelType.linkedName,
+          '<a href="%%__HTMLBASE_dartdoc_internal__%%ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
     });
 
     test(
@@ -2366,8 +2614,8 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
         () {
       var aMethodInterface = TemplatedInterface.instanceMethods
           .singleWhere((m) => m.name == 'aMethodInterface');
-      expect(aMethodInterface.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
+      expect(aMethodInterface.modelType.returnType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
     });
 
     test(
@@ -2375,8 +2623,8 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
         () {
       var aInheritedMethod = TemplatedInterface.instanceMethods
           .singleWhere((m) => m.name == 'aInheritedMethod');
-      expect(aInheritedMethod.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
+      expect(aInheritedMethod.modelType.returnType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/AnotherParameterizedClass-class.html">AnotherParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
     });
 
     test(
@@ -2384,8 +2632,8 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
         () {
       var aTypedefReturningMethodInterface = TemplatedInterface.instanceMethods
           .singleWhere((m) => m.name == 'aTypedefReturningMethodInterface');
-      expect(aTypedefReturningMethodInterface.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">String</span>&gt;</span></span>&gt;</span>');
+      expect(aTypedefReturningMethodInterface.modelType.returnType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">String</span>&gt;</span></span>&gt;</span>');
     });
 
     test(
@@ -2393,20 +2641,20 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
         () {
       var aInheritedTypedefReturningMethod = TemplatedInterface.instanceMethods
           .singleWhere((m) => m.name == 'aInheritedTypedefReturningMethod');
-      expect(aInheritedTypedefReturningMethod.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
+      expect(aInheritedTypedefReturningMethod.modelType.returnType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
     });
 
     test('parameterized types for inherited operator is correctly displayed',
         () {
       var aInheritedAdditionOperator = TemplatedInterface.inheritedOperators
           .singleWhere((m) => m.name == 'operator +');
-      expect(aInheritedAdditionOperator.linkedReturnType,
-          '<a href="${HTMLBASE_PLACEHOLDER}ex/ParameterizedClass-class.html">ParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
+      expect(aInheritedAdditionOperator.modelType.returnType.linkedName,
+          '<a href="${htmlBasePlaceholder}ex/ParameterizedClass-class.html">ParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span>');
       expect(
           ParameterRendererHtml()
               .renderLinkedParams(aInheritedAdditionOperator.parameters),
-          '<span class="parameter" id="+-param-other"><span class="type-annotation"><a href="${HTMLBASE_PLACEHOLDER}ex/ParameterizedClass-class.html">ParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span></span> <span class="parameter-name">other</span></span>');
+          '<span class="parameter" id="+-param-other"><span class="type-annotation"><a href="${htmlBasePlaceholder}ex/ParameterizedClass-class.html">ParameterizedClass</a><span class="signature">&lt;<wbr><span class="type-parameter">List<span class="signature">&lt;<wbr><span class="type-parameter">int</span>&gt;</span></span>&gt;</span></span> <span class="parameter-name">other</span></span>');
     });
 
     test('', () {});
@@ -2467,7 +2715,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
 
     test('verify parameter types are correctly displayed', () {
       expect(
-          getAFunctionReturningVoid.linkedReturnType,
+          getAFunctionReturningVoid.modelType.returnType.linkedName,
           equals(
               'void Function<span class="signature">(<span class="parameter" id="param-"><span class="type-annotation">T1</span>, </span><span class="parameter" id="param-"><span class="type-annotation">T2</span></span>)</span>'));
     });
@@ -2476,7 +2724,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
         'verify type parameters to anonymous functions are distinct from normal parameters and instantiated type parameters from method, displayed correctly',
         () {
       expect(
-          getAFunctionReturningBool.linkedReturnType,
+          getAFunctionReturningBool.modelType.returnType.linkedName,
           equals(
               'bool Function&lt;<wbr><span class="type-parameter">T4</span>&gt;<span class="signature">(<span class="parameter" id="param-"><span class="type-annotation">String</span>, </span><span class="parameter" id="param-"><span class="type-annotation">T1</span>, </span><span class="parameter" id="param-"><span class="type-annotation">T4</span></span>)</span>'));
     });
@@ -2512,7 +2760,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
         'an inherited method from the core SDK has a href relative to the package class',
         () {
       expect(inheritedClear.href,
-          equals('${HTMLBASE_PLACEHOLDER}ex/CatString/clear.html'));
+          equals('${htmlBasePlaceholder}ex/CatString/clear.html'));
     });
 
     test(
@@ -2521,7 +2769,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           inheritedClear.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/CatString/clear.html">clear</a>'));
+              '<a href="${htmlBasePlaceholder}ex/CatString/clear.html">clear</a>'));
     });
 
     test('has enclosing element', () {
@@ -2538,7 +2786,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     });
 
     test('can have params', () {
-      expect(isGreaterThan.canHaveParameters, isTrue);
+      expect(isGreaterThan.isCallable, isTrue);
     });
 
     test('has parameters', () {
@@ -2546,11 +2794,11 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     });
 
     test('return type', () {
-      expect(isGreaterThan.modelType.createLinkedReturnTypeName(), 'bool');
+      expect(isGreaterThan.modelType.returnType.linkedName, 'bool');
     });
 
     test('return type has Future', () {
-      expect(m7.linkedReturnType, contains('Future'));
+      expect(m7.modelType.returnType.linkedName, contains('Future'));
     });
 
     test('parameter has generics in signature', () {
@@ -2560,12 +2808,16 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
 
     test('parameter is a function', () {
       var functionArgParam = m4.parameters[1];
-      expect(functionArgParam.modelType.createLinkedReturnTypeName(), 'String');
+      expect(
+          (functionArgParam.modelType as CallableElementTypeMixin)
+              .returnType
+              .linkedName,
+          'String');
     });
 
     test('method overrides another', () {
       expect(m1.isOverride, isTrue);
-      expect(m1.features, contains('override'));
+      expect(m1.features, contains(Feature.overrideFeature));
     });
 
     test('generic method type args are rendered', () {
@@ -2627,7 +2879,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           plus.href,
           equals(
-              '${HTMLBASE_PLACEHOLDER}ex/SpecializedDuration/operator_plus.html'));
+              '${htmlBasePlaceholder}ex/SpecializedDuration/operator_plus.html'));
     });
 
     test('if inherited and superclass not in package, link to enclosed class',
@@ -2635,7 +2887,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           plus.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/SpecializedDuration/operator_plus.html">operator +</a>'));
+              '<a href="${htmlBasePlaceholder}ex/SpecializedDuration/operator_plus.html">operator +</a>'));
     });
   });
 
@@ -2794,7 +3046,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
           contains('This getter is documented'));
       expect(
           documentedPartialFieldInSubclassOnly.annotations
-              .contains('inherited-setter'),
+              .contains(Feature.inheritedSetter),
           isFalse);
     });
 
@@ -2819,15 +3071,21 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(implicitGetterExplicitSetter.getter.isInherited, isTrue);
       expect(implicitGetterExplicitSetter.setter.isInherited, isFalse);
       expect(implicitGetterExplicitSetter.isInherited, isFalse);
+      expect(implicitGetterExplicitSetter.features.contains(Feature.inherited),
+          isFalse);
       expect(
-          implicitGetterExplicitSetter.features.contains('inherited'), isFalse);
-      expect(implicitGetterExplicitSetter.features.contains('inherited-getter'),
+          implicitGetterExplicitSetter.features
+              .contains(Feature.inheritedGetter),
           isTrue);
       expect(
-          implicitGetterExplicitSetter.features.contains('override'), isFalse);
-      expect(implicitGetterExplicitSetter.features.contains('override-setter'),
+          implicitGetterExplicitSetter.features
+              .contains(Feature.overrideFeature),
+          isFalse);
+      expect(
+          implicitGetterExplicitSetter.features
+              .contains(Feature.overrideSetter),
           isTrue);
-      expect(implicitGetterExplicitSetter.features.contains('read / write'),
+      expect(implicitGetterExplicitSetter.features.contains(Feature.readWrite),
           isTrue);
       expect(
           implicitGetterExplicitSetter.oneLineDoc,
@@ -2843,15 +3101,21 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(explicitGetterImplicitSetter.getter.isInherited, isFalse);
       expect(explicitGetterImplicitSetter.setter.isInherited, isTrue);
       expect(explicitGetterImplicitSetter.isInherited, isFalse);
+      expect(explicitGetterImplicitSetter.features.contains(Feature.inherited),
+          isFalse);
       expect(
-          explicitGetterImplicitSetter.features.contains('inherited'), isFalse);
-      expect(explicitGetterImplicitSetter.features.contains('inherited-setter'),
+          explicitGetterImplicitSetter.features
+              .contains(Feature.inheritedSetter),
           isTrue);
       expect(
-          explicitGetterImplicitSetter.features.contains('override'), isFalse);
-      expect(explicitGetterImplicitSetter.features.contains('override-getter'),
+          explicitGetterImplicitSetter.features
+              .contains(Feature.overrideFeature),
+          isFalse);
+      expect(
+          explicitGetterImplicitSetter.features
+              .contains(Feature.overrideGetter),
           isTrue);
-      expect(explicitGetterImplicitSetter.features.contains('read / write'),
+      expect(explicitGetterImplicitSetter.features.contains(Feature.readWrite),
           isTrue);
       expect(explicitGetterImplicitSetter.oneLineDoc,
           equals('Getter doc for explicitGetterImplicitSetter'));
@@ -2872,7 +3136,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           lengthX.extendedDocLink,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/WithGetterAndSetter/lengthX.html">[...]</a>'));
+              '<a href="${htmlBasePlaceholder}fake/WithGetterAndSetter/lengthX.html">[...]</a>'));
       expect(lengthX.documentation, contains('the fourth dimension'));
       expect(lengthX.documentation, isNot(contains('[...]')));
     });
@@ -2884,7 +3148,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
 
     test('inherited property has a linked name to superclass in package', () {
       expect(mInB.linkedName,
-          equals('<a href="${HTMLBASE_PLACEHOLDER}ex/Apple/m.html">m</a>'));
+          equals('<a href="${htmlBasePlaceholder}ex/Apple/m.html">m</a>'));
     });
 
     test(
@@ -2893,7 +3157,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           isEmpty.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/CatString/isEmpty.html">isEmpty</a>'));
+              '<a href="${htmlBasePlaceholder}ex/CatString/isEmpty.html">isEmpty</a>'));
     });
 
     test('inherited property has the enclosing class', () {
@@ -2920,14 +3184,14 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(f1.isFinal, isFalse);
       expect(finalProperty.isFinal, isTrue);
       expect(finalProperty.isLate, isFalse);
-      expect(finalProperty.features, contains('final'));
-      expect(finalProperty.features, isNot(contains('late')));
+      expect(finalProperty.features, contains(Feature.finalFeature));
+      expect(finalProperty.features, isNot(contains(Feature.lateFeature)));
       expect(onlySetter.isFinal, isFalse);
-      expect(onlySetter.features, isNot(contains('final')));
-      expect(onlySetter.features, isNot(contains('late')));
+      expect(onlySetter.features, isNot(contains(Feature.finalFeature)));
+      expect(onlySetter.features, isNot(contains(Feature.lateFeature)));
       expect(dynamicGetter.isFinal, isFalse);
-      expect(dynamicGetter.features, isNot(contains('final')));
-      expect(dynamicGetter.features, isNot(contains('late')));
+      expect(dynamicGetter.features, isNot(contains(Feature.finalFeature)));
+      expect(dynamicGetter.features, isNot(contains(Feature.lateFeature)));
     });
 
     test('is not static', () {
@@ -2978,12 +3242,6 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
           withGenericSub.inheritedFields.where((p) => p.name == 'prop').length,
           equals(1));
     });
-
-    test('has abstract kind', () {
-      Field abstractField = UnusualProperties.allModelElements
-          .firstWhere((e) => e.name == 'abstractProperty');
-      expect(abstractField.fullkind, 'abstract property');
-    });
   });
 
   group('Accessor', () {
@@ -3029,9 +3287,9 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       final fieldWithTypedef =
           apple.instanceFields.firstWhere((m) => m.name == 'fieldWithTypedef');
       expect(
-          fieldWithTypedef.linkedReturnType,
+          fieldWithTypedef.modelType.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">bool</span>&gt;</span>'));
+              '<a href="${htmlBasePlaceholder}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">bool</span>&gt;</span>'));
     });
   });
 
@@ -3069,22 +3327,21 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     test('Verify that final and late show up (or not) appropriately', () {
       expect(meaningOfLife.isFinal, isTrue);
       expect(meaningOfLife.isLate, isFalse);
-      expect(meaningOfLife.features, contains('final'));
-      expect(meaningOfLife.features, isNot(contains('late')));
+      expect(meaningOfLife.features, contains(Feature.finalFeature));
+      expect(meaningOfLife.features, isNot(contains(Feature.lateFeature)));
       expect(justGetter.isFinal, isFalse);
-      expect(justGetter.features, isNot(contains('final')));
-      expect(justGetter.features, isNot(contains('late')));
+      expect(justGetter.features, isNot(contains(Feature.finalFeature)));
+      expect(justGetter.features, isNot(contains(Feature.lateFeature)));
       expect(justSetter.isFinal, isFalse);
-      expect(justSetter.features, isNot(contains('final')));
-      expect(justSetter.features, isNot(contains('late')));
+      expect(justSetter.features, isNot(contains(Feature.finalFeature)));
+      expect(justSetter.features, isNot(contains(Feature.lateFeature)));
     });
 
     test(
         'Verify that a map containing anonymous functions as values works correctly',
         () {
       var typeArguments =
-          (importantComputations.modelType.returnType as DefinedElementType)
-              .typeArguments;
+          (importantComputations.modelType as DefinedElementType).typeArguments;
       expect(typeArguments, isNotEmpty);
       expect(
           typeArguments.last.linkedName,
@@ -3093,7 +3350,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
           matches(RegExp(
               r'(dynamic|num) Function<span class="signature">\(<span class="parameter" id="param-a"><span class="type-annotation">List<span class="signature">&lt;<wbr><span class="type-parameter">num</span>&gt;</span></span> <span class="parameter-name">a</span></span>\)</span>')));
       expect(
-          importantComputations.linkedReturnType,
+          importantComputations.modelType.linkedName,
           matches(RegExp(
               r'Map<span class="signature">&lt;<wbr><span class="type-parameter">int</span>, <span class="type-parameter">(dynamic|num) Function<span class="signature">\(<span class="parameter" id="param-a"><span class="type-annotation">List<span class="signature">&lt;<wbr><span class="type-parameter">num</span>&gt;</span></span> <span class="parameter-name">a</span></span>\)</span></span>&gt;</span>')));
     });
@@ -3102,9 +3359,9 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
         'Verify that a complex type parameter with an anonymous function works correctly',
         () {
       expect(
-          complicatedReturn.linkedReturnType,
+          complicatedReturn.modelType.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ATypeTakingClass-class.html">ATypeTakingClass</a><span class="signature">&lt;<wbr><span class="type-parameter">String Function<span class="signature">(<span class="parameter" id="param-"><span class="type-annotation">int</span></span>)</span></span>&gt;</span>'));
+              '<a href="${htmlBasePlaceholder}fake/ATypeTakingClass-class.html">ATypeTakingClass</a><span class="signature">&lt;<wbr><span class="type-parameter">String Function<span class="signature">(<span class="parameter" id="param-"><span class="type-annotation">int</span></span>)</span></span>&gt;</span>'));
     });
 
     test('@nodoc on simple property works', () {
@@ -3140,11 +3397,10 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     });
 
     test('type arguments are correct', () {
-      expect(mapWithDynamicKeys.modelType.typeArguments, hasLength(2));
-      expect(mapWithDynamicKeys.modelType.typeArguments.first.name,
-          equals('dynamic'));
-      expect(mapWithDynamicKeys.modelType.typeArguments.last.name,
-          equals('String'));
+      var modelType = mapWithDynamicKeys.modelType as ParameterizedElementType;
+      expect(modelType.typeArguments, hasLength(2));
+      expect(modelType.typeArguments.first.name, equals('dynamic'));
+      expect(modelType.typeArguments.last.name, equals('String'));
     });
 
     test('has enclosing element', () {
@@ -3156,11 +3412,11 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     });
 
     test('linked return type is a double', () {
-      expect(v.linkedReturnType, 'double');
+      expect(v.modelType.linkedName, 'double');
     });
 
     test('linked return type is dynamic', () {
-      expect(v3.linkedReturnType, 'dynamic');
+      expect(v3.modelType.linkedName, 'dynamic');
     });
 
     test('just a getter has documentation', () {
@@ -3214,7 +3470,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
 
     test('substrings of the constant values type are not linked (#1535)', () {
       expect(aName.constantValue,
-          'const <a href="${HTMLBASE_PLACEHOLDER}ex/ExtendedShortName/ExtendedShortName.html">ExtendedShortName</a>(&quot;hello there&quot;)');
+          'const <a href="${htmlBasePlaceholder}ex/ExtendedShortName/ExtendedShortName.html">ExtendedShortName</a>(&quot;hello there&quot;)');
     });
 
     test('constant field values are escaped', () {
@@ -3258,7 +3514,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
 
     test('MY_CAT is linked', () {
       expect(cat.constantValue,
-          'const <a href="${HTMLBASE_PLACEHOLDER}ex/ConstantCat/ConstantCat.html">ConstantCat</a>(&#39;tabby&#39;)');
+          'const <a href="${htmlBasePlaceholder}ex/ConstantCat/ConstantCat.html">ConstantCat</a>(&#39;tabby&#39;)');
     });
 
     test('exported property', () {
@@ -3302,11 +3558,11 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           referToADefaultConstructor.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ReferToADefaultConstructor-class.html">ReferToADefaultConstructor</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ReferToADefaultConstructor-class.html">ReferToADefaultConstructor</a>'));
       expect(
           referToADefaultConstructor.documentationAsHtml,
           contains(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ReferToADefaultConstructor/ReferToADefaultConstructor.html">ReferToADefaultConstructor.ReferToADefaultConstructor</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ReferToADefaultConstructor/ReferToADefaultConstructor.html">ReferToADefaultConstructor.ReferToADefaultConstructor</a>'));
     });
 
     test('displays generic parameters correctly', () {
@@ -3379,7 +3635,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
 
     test('a function returning a Future<void>', () {
       expect(
-          returningFutureVoid.linkedReturnType,
+          returningFutureVoid.modelType.returnType.linkedName,
           equals(
               'Future<span class="signature">&lt;<wbr><span class="type-parameter">void</span>&gt;</span>'));
     });
@@ -3396,7 +3652,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           ExtendsFutureVoid.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ExtendsFutureVoid-class.html">ExtendsFutureVoid</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ExtendsFutureVoid-class.html">ExtendsFutureVoid</a>'));
       var FutureVoid = ExtendsFutureVoid.publicSuperChain
           .firstWhere((c) => c.name == 'Future');
       expect(
@@ -3409,9 +3665,9 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           ImplementsFutureVoid.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ImplementsFutureVoid-class.html">ImplementsFutureVoid</a>'));
-      var FutureVoid = ImplementsFutureVoid.publicInterfaces
-          .firstWhere((c) => c.name == 'Future');
+              '<a href="${htmlBasePlaceholder}fake/ImplementsFutureVoid-class.html">ImplementsFutureVoid</a>'));
+      var FutureVoid =
+          ImplementsFutureVoid.interfaces.firstWhere((c) => c.name == 'Future');
       expect(
           FutureVoid.linkedName,
           equals(
@@ -3422,13 +3678,13 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           ATypeTakingClassMixedIn.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ATypeTakingClassMixedIn-class.html">ATypeTakingClassMixedIn</a>'));
+              '<a href="${htmlBasePlaceholder}fake/ATypeTakingClassMixedIn-class.html">ATypeTakingClassMixedIn</a>'));
       var ATypeTakingClassVoid = ATypeTakingClassMixedIn.mixedInTypes
           .firstWhere((c) => c.name == 'ATypeTakingClass');
       expect(
           ATypeTakingClassVoid.linkedName,
           equals(
-              '<a href="${HTMLBASE_PLACEHOLDER}fake/ATypeTakingClass-class.html">ATypeTakingClass</a><span class="signature">&lt;<wbr><span class="type-parameter">void</span>&gt;</span>'));
+              '<a href="${htmlBasePlaceholder}fake/ATypeTakingClass-class.html">ATypeTakingClass</a><span class="signature">&lt;<wbr><span class="type-parameter">void</span>&gt;</span>'));
     });
   });
 
@@ -3448,13 +3704,14 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
   });
 
   group('Typedef', () {
-    Typedef t;
-    Typedef generic;
-    Typedef aComplexTypedef;
+    FunctionTypedef processMessage;
+    FunctionTypedef generic;
+    FunctionTypedef aComplexTypedef;
     Class TypedefUsingClass;
 
     setUpAll(() {
-      t = exLibrary.typedefs.firstWhere((t) => t.name == 'processMessage');
+      processMessage =
+          exLibrary.typedefs.firstWhere((t) => t.name == 'processMessage');
       generic =
           fakeLibrary.typedefs.firstWhere((t) => t.name == 'NewGenericTypedef');
 
@@ -3471,12 +3728,13 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           ParameterRendererHtml().renderLinkedParams(theConstructor.parameters),
           equals(
-              '<span class="parameter" id="-param-x"><span class="type-annotation"><a href="${HTMLBASE_PLACEHOLDER}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">double</span>&gt;</span></span> <span class="parameter-name">x</span></span>'));
+              '<span class="parameter" id="-param-x"><span class="type-annotation"><a href="${htmlBasePlaceholder}ex/ParameterizedTypedef.html">ParameterizedTypedef</a><span class="signature">&lt;<wbr><span class="type-parameter">double</span>&gt;</span></span> <span class="parameter-name">x</span></span>'));
     });
 
     test('anonymous nested functions inside typedefs are handled', () {
       expect(aComplexTypedef, isNotNull);
-      expect(aComplexTypedef.linkedReturnType, startsWith('void Function'));
+      expect(aComplexTypedef.modelType.returnType.linkedName,
+          startsWith('void Function'));
       expect(
           aComplexTypedef.nameWithGenerics,
           equals(
@@ -3486,7 +3744,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     test('anonymous nested functions inside typedefs are handled correctly',
         () {
       expect(
-          aComplexTypedef.linkedReturnType,
+          aComplexTypedef.modelType.returnType.linkedName,
           equals(
               'void Function<span class="signature">(<span class="parameter" id="param-"><span class="type-annotation">A1</span>, </span><span class="parameter" id="param-"><span class="type-annotation">A2</span>, </span><span class="parameter" id="param-"><span class="type-annotation">A3</span></span>)</span>'));
       expect(
@@ -3498,32 +3756,32 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     });
 
     test('has a fully qualified name', () {
-      expect(t.fullyQualifiedName, 'ex.processMessage');
+      expect(processMessage.fullyQualifiedName, 'ex.processMessage');
       expect(generic.fullyQualifiedName, 'fake.NewGenericTypedef');
     });
 
     test('has enclosing element', () {
-      expect(t.enclosingElement.name, equals(exLibrary.name));
+      expect(processMessage.enclosingElement.name, equals(exLibrary.name));
       expect(generic.enclosingElement.name, equals(fakeLibrary.name));
     });
 
     test('docs', () {
-      expect(t.documentation, equals(''));
+      expect(processMessage.documentation, equals(''));
       expect(generic.documentation,
           equals('A typedef with the new style generic function syntax.'));
     });
 
     test('linked return type', () {
-      expect(t.linkedReturnType, equals('String'));
+      expect(processMessage.modelType.returnType.linkedName, equals('String'));
       expect(
-          generic.linkedReturnType,
+          generic.modelType.returnType.linkedName,
           equals(
               'List<span class="signature">&lt;<wbr><span class="type-parameter">S</span>&gt;</span>'));
     });
 
     test('name with generics', () {
       expect(
-          t.nameWithGenerics,
+          processMessage.nameWithGenerics,
           equals(
               'processMessage&lt;<wbr><span class="type-parameter">T</span>&gt;'));
       expect(
@@ -3536,7 +3794,8 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     // inspects its element member. Find a better way when we start to isolate
     // renderer tests.
     test('TypedefRendererHtml renders genericParameters', () {
-      expect(TypedefRendererHtml().renderGenericParameters(t), equals(''));
+      expect(TypedefRendererHtml().renderGenericParameters(processMessage),
+          equals('&lt;<wbr><span class="type-parameter">T</span>&gt;'));
       expect(TypedefRendererHtml().renderGenericParameters(generic),
           equals('&lt;<wbr><span class="type-parameter">S</span>&gt;'));
     });
@@ -3621,7 +3880,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
     });
 
     test('async return type', () {
-      expect(asyncM.linkedReturnType, 'Future');
+      expect(asyncM.modelType.returnType.linkedName, 'Future');
     });
 
     test('param with generics', () {
@@ -3646,7 +3905,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           params,
           contains(
-              '@<a href="${HTMLBASE_PLACEHOLDER}fake/required-constant.html">required</a>'));
+              '@<a href="${htmlBasePlaceholder}fake/required-constant.html">required</a>'));
     });
 
     test('param exported in library', () {
@@ -3661,7 +3920,7 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       expect(
           params,
           equals('<span class="parameter" id="methodWithTypedefParam-param-p">'
-              '<span class="type-annotation"><a href="${HTMLBASE_PLACEHOLDER}ex/processMessage.html">processMessage</a></span> '
+              '<span class="type-annotation"><a href="${htmlBasePlaceholder}ex/processMessage.html">processMessage</a></span> '
               '<span class="parameter-name">p</span></span>'));
     });
   });
@@ -3778,9 +4037,9 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
 
     test('has the right annotation and is escaped', () {
       expect(
-          forAnnotation.annotations.first,
+          forAnnotation.annotations.first.linkedNameWithParameters,
           equals(
-              '@<a href="${HTMLBASE_PLACEHOLDER}ex/ForAnnotation-class.html">ForAnnotation</a>'
+              '@<a href="${htmlBasePlaceholder}ex/ForAnnotation-class.html">ForAnnotation</a>'
               '(&#39;my value&#39;)'));
     });
 
@@ -3788,16 +4047,16 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       var m = dog.instanceMethods.singleWhere((m) => m.name == 'getClassA');
       expect(m.hasAnnotations, isTrue);
       expect(
-          m.annotations.first,
+          m.annotations.first.linkedNameWithParameters,
           equals(
-              '@<a href="${HTMLBASE_PLACEHOLDER}ex/deprecated-constant.html">deprecated</a>'));
+              '@<a href="${htmlBasePlaceholder}ex/deprecated-constant.html">deprecated</a>'));
     });
 
     test('constructor annotations have the right link and are escaped', () {
       expect(
-          ctr.annotations[0],
+          ctr.annotations.first.linkedNameWithParameters,
           equals(
-              '@<a href="${HTMLBASE_PLACEHOLDER}ex/Deprecated-class.html">Deprecated</a>'
+              '@<a href="${htmlBasePlaceholder}ex/Deprecated-class.html">Deprecated</a>'
               '(&quot;Internal use&quot;)'));
     });
 
@@ -3805,9 +4064,9 @@ String topLevelFunction(int param1, bool param2, Cool coolBeans,
       var createDog2 =
           dog.staticMethods.firstWhere((c) => c.name == 'createDog2');
       expect(
-          createDog2.annotations[0],
+          createDog2.annotations.first.linkedNameWithParameters,
           equals(
-              '@<a href="${HTMLBASE_PLACEHOLDER}ex/deprecated-constant.html">deprecated</a>'));
+              '@<a href="${htmlBasePlaceholder}ex/deprecated-constant.html">deprecated</a>'));
     });
   });
 

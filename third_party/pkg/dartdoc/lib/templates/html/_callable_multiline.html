@@ -2,10 +2,11 @@
 <div>
   <ol class="annotation-list">
     {{#annotations}}
-    <li>{{{.}}}</li>
+    <li>{{{linkedNameWithParameters}}}</li>
     {{/annotations}}
   </ol>
 </div>
 {{/hasAnnotations}}
-<span class="returntype">{{{ linkedReturnType }}}</span>
+
+<span class="returntype">{{{ modelType.returnType.linkedName }}}</span>
 {{>name_summary}}{{{genericParameters}}}(<wbr>{{#hasParameters}}{{{linkedParamsLines}}}{{/hasParameters}})

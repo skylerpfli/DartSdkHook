@@ -1,3 +1,20 @@
+## 1.8.0
+
+* Stable release for null safety.
+
+## 1.8.0-nullsafety.3
+
+* Update SDK constraints to `>=2.12.0-0 <3.0.0` based on beta release
+  guidelines.
+
+## 1.8.0-nullsafety.2
+
+* Allow prerelease versions of the 2.12 sdk.
+
+## 1.8.0-nullsafety.1
+
+* Allow 2.10 stable and 2.11.0 dev SDK versions.
+
 ## 1.8.0-nullsafety
 
 * Migrate to null safety.

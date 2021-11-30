@@ -2,13 +2,13 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:source_span/source_span.dart';
 
+import '../util/package_config.dart';
 import 'string_literal_iterator.dart';
 
 /// Runs [code] in an isolate.
@@ -23,7 +23,7 @@ Future<Isolate> runInIsolate(String code, Object message,
         Uri.dataFromString(code, mimeType: 'application/dart', encoding: utf8),
         [],
         message,
-        packageConfig: await Isolate.packageConfig,
+        packageConfig: await packageConfigUri,
         checked: true,
         onExit: onExit);
 

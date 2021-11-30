@@ -27,7 +27,7 @@ For example, say the package name is `my_package`.  Here are the library names
 for various files in the package:
 
 **GOOD:**
-```
+```dart
 // In lib/my_package.dart
 library my_package;
 
@@ -46,12 +46,14 @@ library my_package.src.private;
 
 ''';
 
+/// Checks if the [name] is equivalent to the specified [prefix] or at least
+/// is prefixed by it with a delimiting `.`.
 bool matchesOrIsPrefixedBy(String name, String prefix) =>
     name == prefix || name.startsWith('$prefix.');
 
 class PackagePrefixedLibraryNames extends LintRule
     implements ProjectVisitor, NodeLintRule {
-  DartProject project;
+  DartProject? project;
 
   PackagePrefixedLibraryNames()
       : super(
@@ -81,23 +83,28 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   _Visitor(this.rule);
 
-  DartProject get project => rule.project;
-
   @override
   void visitLibraryDirective(LibraryDirective node) {
     // If no project info is set, bail early.
     // https://github.com/dart-lang/linter/issues/154
-    if (project == null) {
+    final project = rule.project;
+    final element = node.element;
+    if (project == null || element == null) {
       return;
     }
-    final source = node.element.source;
-    var prefix = Analyzer.facade.createLibraryNamePrefix(
+
+    final source = element.source;
+    if (source == null) {
+      return;
+    }
+
+    final prefix = Analyzer.facade.createLibraryNamePrefix(
         libraryPath: source.fullName,
         projectRoot: project.root.absolute.path,
         packageName: project.name);
 
-    var libraryName = node.element.name;
-    if (!matchesOrIsPrefixedBy(libraryName, prefix)) {
+    final name = element.name;
+    if (name == null || !matchesOrIsPrefixedBy(name, prefix)) {
       rule.reportLint(node.name);
     }
   }

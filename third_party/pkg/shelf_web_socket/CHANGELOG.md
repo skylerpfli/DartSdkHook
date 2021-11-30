@@ -1,3 +1,22 @@
+## 1.0.1
+
+* Require the latest shelf, remove dead code.
+
+## 1.0.0
+
+* Migrate to null safety.
+
+## 0.2.4+1
+
+* Support the latest `package:web_socket_channel`.
+
+## 0.2.4
+
+* Support the latest shelf release (`1.x.x`).
+* Require at least Dart 2.1
+* Allow omitting `protocols` argument even if the `onConnection` callback takes
+  a second argument.
+
 ## 0.2.3
 
 * Add `pingInterval` argument to `webSocketHandler`, to be passed through

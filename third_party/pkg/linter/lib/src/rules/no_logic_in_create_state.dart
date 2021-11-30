@@ -20,7 +20,7 @@ constructor parameters should also be avoided and so further, the State
 constructor is required to be passed no arguments.
 
 **BAD:**
-```
+```dart
 MyState global;
 
 class MyStateful extends StatefulWidget {
@@ -32,14 +32,14 @@ class MyStateful extends StatefulWidget {
 }
 ```
 
-```
+```dart
 class MyStateful extends StatefulWidget {
   @override
   MyState createState() => MyState()..field = 42;
 }
 ```
 
-```
+```dart
 class MyStateful extends StatefulWidget {
   @override
   MyState createState() => MyState(42);
@@ -48,7 +48,7 @@ class MyStateful extends StatefulWidget {
 
 
 **GOOD:**
-```
+```dart
 class MyStateful extends StatefulWidget {
   @override
   MyState createState() {
@@ -87,11 +87,11 @@ class _Visitor extends SimpleAstVisitor {
 
     final parent = node.parent;
     if (parent is! ClassDeclaration ||
-        !isStatefulWidget((parent as ClassDeclaration).declaredElement)) {
+        !isStatefulWidget(parent.declaredElement)) {
       return;
     }
     final body = node.body;
-    Expression expressionToTest;
+    Expression? expressionToTest;
     if (body is BlockFunctionBody) {
       final statements = body.block.statements;
       if (statements.length == 1) {

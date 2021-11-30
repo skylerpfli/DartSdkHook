@@ -13,7 +13,6 @@ import 'package:github/github.dart';
 import 'package:http/http.dart' as http;
 import 'package:linter/src/analyzer.dart';
 import 'package:linter/src/rules.dart';
-import 'package:meta/meta.dart';
 import 'package:path/path.dart' as path;
 
 import '../parse.dart';
@@ -45,13 +44,13 @@ const checkMark = '✅';
 const consider = '🤔';
 const skip = '➖';
 
-Iterable<LintRule> _registeredLints;
+Iterable<LintRule>? _registeredLints;
 
-List<String> _unfixableLints;
+List<String>? _unfixableLints;
 
-Iterable<String> get registeredLintNames => registeredLints.map((r) => r.name);
+Iterable<String> get registeredLintNames => registeredLints!.map((r) => r.name);
 
-Iterable<LintRule> get registeredLints {
+Iterable<LintRule>? get registeredLints {
   if (_registeredLints == null) {
     registerLintRules();
     _registeredLints = Registry.ruleRegistry.toList()
@@ -60,7 +59,7 @@ Iterable<LintRule> get registeredLints {
   return _registeredLints;
 }
 
-List<String> get unfixableLints => _unfixableLints ?? _getUnfixableLints();
+List<String?> get unfixableLints => _unfixableLints ?? _getUnfixableLints();
 
 StringBuffer buildFooter(ScoreCard scorecard, List<Detail> details) {
   var scoreLintCount = 0;
@@ -75,7 +74,7 @@ StringBuffer buildFooter(ScoreCard scorecard, List<Detail> details) {
   for (var score in scorecard.scores) {
     for (var ruleSet in score.ruleSets) {
       var hasFixOrAssist = score.hasFix || score.hasAssist;
-      if (ruleSet == 'score') {
+      if (ruleSet == 'core') {
         ++scoreLintCount;
         if (hasFixOrAssist) {
           ++scoreFixCount;
@@ -119,25 +118,25 @@ StringBuffer buildFooter(ScoreCard scorecard, List<Detail> details) {
 }
 
 int _compareRuleSets(List<String> s1, List<String> s2) {
-  if (s1.contains('score')) {
-    return s2.contains('score') ? 0 : -1;
+  if (s1.contains('core')) {
+    return s2.contains('core') ? 0 : -1;
   }
-  if (s2.contains('score')) {
+  if (s2.contains('core')) {
     return 1;
   }
   return 0;
 }
 
-List<String> _getUnfixableLints() {
+List<String?> _getUnfixableLints() {
   var excludes = File('tool/canonical/fix_excludes.json');
   var contents = excludes.readAsStringSync();
   var json = jsonDecode(contents);
-  var skipped = <String>[];
+  var skipped = <String?>[];
   for (var entry in json) {
     var name = entry['lint'];
     var notes = entry['notes'];
     if (notes != 'TODO') {
-      skipped.add(name as String);
+      skipped.add(name as String?);
     }
   }
   return skipped;
@@ -149,7 +148,7 @@ class Detail {
   static const Detail rule = Detail('name', header: Header.left);
   static const Detail fix = Detail('fix');
   static const Detail status = Detail('status');
-  static const Detail score = Detail('score');
+  static const Detail score = Detail('core');
   static const Detail recommend = Detail('recommend');
   static const Detail bugs = Detail('bug refs', header: Header.left);
   final String name;
@@ -177,13 +176,13 @@ class LintScore {
   List<String> bugReferences;
 
   LintScore({
-    @required this.name,
-    @required this.hasAssist,
-    @required this.hasFix,
-    @required this.hasBulkFix,
-    @required this.maturity,
-    @required this.ruleSets,
-    @required this.bugReferences,
+    required this.name,
+    required this.hasAssist,
+    required this.hasFix,
+    required this.hasBulkFix,
+    required this.maturity,
+    required this.ruleSets,
+    required this.bugReferences,
   });
 
   String get _ruleSets => ruleSets.isNotEmpty ? ' ${ruleSets.toString()}' : '';
@@ -205,7 +204,7 @@ class LintScore {
           sb.write('${maturity != 'stable' ? ' **$maturity** ' : ""} |');
           break;
         case Detail.score:
-          sb.write('${ruleSets.contains('score') ? " $checkMark" : ""} |');
+          sb.write('${ruleSets.contains('core') ? " $checkMark" : ""} |');
           break;
         case Detail.recommend:
           sb.write('${ruleSets.contains('recommend') ? " $checkMark" : ""} |');
@@ -232,7 +231,7 @@ class ScoreCard {
   }
 
   String asMarkdown(List<Detail> details,
-      {int Function(LintScore s1, LintScore s2) sorter}) {
+      {int Function(LintScore s1, LintScore s2)? sorter}) {
     // Header.
     var sb = StringBuffer();
     details.forEach((detail) => sb.write('| ${detail.name} '));
@@ -265,14 +264,14 @@ class ScoreCard {
     // var bugs = issues.where(_isBug).toList();
     var bugs = <Issue>[];
 
-    var scoreRuleset = _readScoreLints();
+    var coreRuleset = _readCoreLints();
     var recommendRuleset = _readRecommendLints();
 
     var scorecard = ScoreCard();
-    for (var lint in registeredLints) {
+    for (var lint in registeredLints!) {
       var ruleSets = <String>[];
-      if (scoreRuleset.contains(lint.name)) {
-        ruleSets.add('score');
+      if (coreRuleset.contains(lint.name)) {
+        ruleSets.add('core');
       }
       if (recommendRuleset.contains(lint.name)) {
         ruleSets.add('recommend');
@@ -284,7 +283,8 @@ class ScoreCard {
 
       var bugReferences = <String>[];
       for (var bug in bugs) {
-        if (bug.title.contains(lint.name)) {
+        var title = bug.title;
+        if (title.contains(lint.name)) {
           bugReferences.add('#${bug.number.toString()}');
         }
       }
@@ -317,21 +317,21 @@ class ScoreCard {
   //   }
   // }
 
-  static List<String> _getLintsWithAssists() {
+  static List<String?> _getLintsWithAssists() {
     var assists = File('tool/canonical/assists.json');
     var contents = assists.readAsStringSync();
     var json = jsonDecode(contents);
-    var lints = <String>[];
+    var lints = <String?>[];
     for (var entry in json) {
-      lints.add(entry['lint'] as String);
+      lints.add(entry['lint'] as String?);
     }
     return lints;
   }
 
   static Future<List<String>> _getLintsWithBulkFixes() async {
     var client = http.Client();
-    var req = await client.get(
-        'https://raw.githubusercontent.com/dart-lang/sdk/master/pkg/analysis_server/lib/src/services/correction/bulk_fix_processor.dart');
+    var req = await client.get(Uri.parse(
+        'https://raw.githubusercontent.com/dart-lang/sdk/master/pkg/analysis_server/lib/src/services/correction/bulk_fix_processor.dart'));
 
     var parser = CompilationUnitParser();
     var cu = parser.parse(contents: req.body, name: 'bulk_fix_processor.dart');
@@ -345,8 +345,8 @@ class ScoreCard {
 
   static Future<List<String>> _getLintsWithFixes() async {
     var client = http.Client();
-    var req = await client.get(
-        'https://raw.githubusercontent.com/dart-lang/sdk/master/pkg/analysis_server/lib/src/services/linter/lint_names.dart');
+    var req = await client.get(Uri.parse(
+        'https://raw.githubusercontent.com/dart-lang/sdk/master/pkg/analysis_server/lib/src/services/linter/lint_names.dart'));
 
     var parser = CompilationUnitParser();
     var cu = parser.parse(contents: req.body, name: 'lint_names.dart');
@@ -371,8 +371,8 @@ class ScoreCard {
   static List<String> _readRecommendLints() =>
       _readLints(path.join('tool', 'canonical', 'recommend.yaml'));
 
-  static List<String> _readScoreLints() =>
-      _readLints(path.join('tool', 'canonical', 'score.yaml'));
+  static List<String> _readCoreLints() =>
+      _readLints(path.join('tool', 'canonical', 'core.yaml'));
 }
 
 class _BulkFixCollector extends _LintNameCollector {
@@ -380,13 +380,15 @@ class _BulkFixCollector extends _LintNameCollector {
   void visitFieldDeclaration(FieldDeclaration node) {
     for (var field in node.fields.variables) {
       if (field.name.name == 'lintProducerMap') {
-        var map = field.initializer as SetOrMapLiteral;
-        for (var element in map.elements) {
-          var entry = element as MapLiteralEntry;
-          var key = entry.key;
-          if (key is PrefixedIdentifier) {
-            if (key.prefix.name == 'LintNames') {
-              addLint(key.identifier.name);
+        var initializer = field.initializer;
+        if (initializer is SetOrMapLiteral) {
+          for (var element in initializer.elements) {
+            var entry = element as MapLiteralEntry;
+            var key = entry.key;
+            if (key is PrefixedIdentifier) {
+              if (key.prefix.name == 'LintNames') {
+                addLint(key.identifier.name);
+              }
             }
           }
         }

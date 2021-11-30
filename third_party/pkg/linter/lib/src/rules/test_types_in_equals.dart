@@ -17,7 +17,7 @@ Not testing types might result in null pointer exceptions which will be
 unexpected for consumers of your class.
 
 **GOOD:**
-```
+```dart
 class Field {
 }
 
@@ -43,7 +43,7 @@ class Good {
 ```
 
 **BAD:**
-```
+```dart
 class Field {
 }
 
@@ -98,16 +98,16 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
 
     final identifier = node.expression as SimpleIdentifier;
-    var parameters = declaration.parameters;
-    final parameterName = parameters?.parameterElements?.first?.name;
+    var parameters = declaration?.parameters;
+    final parameterName = parameters?.parameterElements.first?.name;
     if (identifier.name == parameterName) {
       rule.reportLint(node);
     }
   }
 
-  bool _isEqualsOverride(MethodDeclaration declaration) =>
+  bool _isEqualsOverride(MethodDeclaration? declaration) =>
       declaration != null &&
       declaration.isOperator &&
       declaration.name.name == '==' &&
-      declaration.parameters?.parameterElements?.length == 1;
+      declaration.parameters?.parameterElements.length == 1;
 }

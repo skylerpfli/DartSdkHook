@@ -18,7 +18,7 @@ Tighten type of initializing formal if a non-null assert exists. This allows the
 type system to catch problems rather than have them only be caught at run-time.
 
 **BAD:**
-```
+```dart
 class A {
   A.c1(this.p) : assert(p != null);
   A.c2(this.p);
@@ -27,7 +27,7 @@ class A {
 ```
 
 **GOOD:**
-```
+```dart
 class A {
   A.c1(String this.p) : assert(p != null);
   A.c2(this.p);
@@ -77,14 +77,17 @@ class _Visitor extends SimpleAstVisitor<void> {
             : e.leftOperand is NullLiteral
                 ? e.rightOperand
                 : null)
-        .where((e) => e != null)
-        .where((e) => context.typeSystem.isNullable(e.staticType))
         .whereType<Identifier>()
+        .where((e) {
+          var staticType = e.staticType;
+          return staticType != null &&
+              context.typeSystem.isNullable(staticType);
+        })
         .map((e) => e.staticElement)
         .whereType<FieldFormalParameterElement>()
         .forEach((e) {
-      rule.reportLint(
-          node.parameters.parameters.firstWhere((p) => p.declaredElement == e));
-    });
+          rule.reportLint(node.parameters.parameters
+              .firstWhere((p) => p.declaredElement == e));
+        });
   }
 }

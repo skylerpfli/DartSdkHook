@@ -28,14 +28,14 @@ directory.  Those files are not part of the package's public API, and they
 might change in ways that could break your code.
 
 **BAD:**
-```
+```dart
 // In 'road_runner'
 import 'package:acme/lib/src/internals.dart;
 ```
 
 ''';
 
-bool isImplementation(Uri uri) {
+bool isImplementation(Uri? uri) {
   final segments = uri?.pathSegments ?? const <String>[];
   if (segments.length > 2) {
     if (segments[1] == 'src') {
@@ -45,9 +45,12 @@ bool isImplementation(Uri uri) {
   return false;
 }
 
-bool isPackage(Uri uri) => uri?.scheme == 'package';
+bool isPackage(Uri? uri) => uri?.scheme == 'package';
 
-bool samePackage(Uri uri1, Uri uri2) {
+bool samePackage(Uri? uri1, Uri? uri2) {
+  if (uri1 == null || uri2 == null) {
+    return false;
+  }
   var segments1 = uri1.pathSegments;
   var segments2 = uri2.pathSegments;
   if (segments1.isEmpty || segments2.isEmpty) {
@@ -79,8 +82,8 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitImportDirective(ImportDirective node) {
-    final importUri = node?.uriSource?.uri;
-    final sourceUri = node?.element?.source?.uri;
+    final importUri = node.uriSource?.uri;
+    final sourceUri = node.element?.source.uri;
 
     // Test for 'package:*/src/'.
     if (!isImplementation(importUri)) {

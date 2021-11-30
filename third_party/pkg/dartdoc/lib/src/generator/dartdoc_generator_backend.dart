@@ -3,21 +3,24 @@
 // BSD-style license that can be found in the LICENSE file.
 
 import 'package:dartdoc/dartdoc.dart';
+import 'package:dartdoc/options.dart';
 import 'package:dartdoc/src/generator/generator_frontend.dart';
 import 'package:dartdoc/src/generator/generator_utils.dart' as generator_util;
 import 'package:dartdoc/src/generator/template_data.dart';
 import 'package:dartdoc/src/generator/templates.dart';
+import 'package:dartdoc/src/generator/templates.renderers.dart';
 import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/model/package.dart';
 import 'package:dartdoc/src/model/package_graph.dart';
+import 'package:dartdoc/src/mustachio/renderer_base.dart';
 import 'package:dartdoc/src/warnings.dart';
-import 'package:mustache/mustache.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as path show Context;
 
 /// Configuration options for the Dartdoc's default backend.
 class DartdocGeneratorBackendOptions implements TemplateOptions {
   @override
   final String relCanonicalPrefix;
+
   @override
   final String toolVersion;
 
@@ -28,32 +31,48 @@ class DartdocGeneratorBackendOptions implements TemplateOptions {
   @override
   final bool useBaseHref;
 
+  @override
+  final String customHeaderContent;
+
+  @override
+  final String customFooterContent;
+
+  @override
+  final String customInnerFooterText;
+
   DartdocGeneratorBackendOptions.fromContext(
       DartdocGeneratorOptionContext context)
       : relCanonicalPrefix = context.relCanonicalPrefix,
         toolVersion = dartdocVersion,
         favicon = context.favicon,
         prettyIndexJson = context.prettyIndexJson,
-        useBaseHref = context.useBaseHref;
+        useBaseHref = context.useBaseHref,
+        customHeaderContent = context.header,
+        customFooterContent = context.footer,
+        customInnerFooterText = context.footerText;
 
-  DartdocGeneratorBackendOptions(
-      {this.relCanonicalPrefix,
-      this.toolVersion,
-      this.favicon,
-      this.prettyIndexJson = false,
-      this.useBaseHref = false});
+  DartdocGeneratorBackendOptions._defaults()
+      : relCanonicalPrefix = null,
+        toolVersion = null,
+        favicon = null,
+        prettyIndexJson = false,
+        useBaseHref = false,
+        customHeaderContent = '',
+        customFooterContent = '',
+        customInnerFooterText = '';
 }
 
-class SidebarGenerator<T extends Documentable> {
+class SidebarGenerator<T extends TemplateData> {
   final Template template;
-  final Map<T, String> _renderCache = {};
+  final RenderFunction<T> renderFunction;
+  final Map<Documentable, String> _renderCache = {};
 
-  SidebarGenerator(this.template);
+  SidebarGenerator(this.template, this.renderFunction);
 
   // Retrieve the render for a specific key, or generate it using the given
   // template data if you need.
-  String getRenderFor(T key, TemplateData templateData) {
-    return _renderCache[key] ??= template.renderString(templateData);
+  String getRenderFor(Documentable key, T templateData) {
+    return _renderCache[key] ??= renderFunction(templateData, template);
   }
 }
 
@@ -61,22 +80,25 @@ class SidebarGenerator<T extends Documentable> {
 abstract class DartdocGeneratorBackend implements GeneratorBackend {
   final DartdocGeneratorBackendOptions options;
   final Templates templates;
-  final SidebarGenerator<Library> sidebarForLibrary;
-  final SidebarGenerator<Container> sidebarForContainer;
+  final SidebarGenerator<TemplateDataWithLibrary<Documentable>>
+      sidebarForLibrary;
+  final SidebarGenerator<TemplateDataWithContainer<Documentable>>
+      sidebarForContainer;
+  final path.Context _pathContext;
 
   DartdocGeneratorBackend(
-      DartdocGeneratorBackendOptions options, this.templates)
-      : options = options ?? DartdocGeneratorBackendOptions(),
-        sidebarForContainer =
-            SidebarGenerator(templates.sidebarContainerTemplate),
-        sidebarForLibrary = SidebarGenerator(templates.sidebarLibraryTemplate);
+      DartdocGeneratorBackendOptions options, this.templates, this._pathContext)
+      : options = options ?? DartdocGeneratorBackendOptions._defaults(),
+        sidebarForLibrary = SidebarGenerator(
+            templates.sidebarLibraryTemplate, renderSidebarForLibrary),
+        sidebarForContainer = SidebarGenerator(
+            templates.sidebarContainerTemplate, renderSidebarForContainer);
 
   /// Helper method to bind template data and emit the content to the writer.
-  void render(FileWriter writer, String filename, Template template,
-      TemplateData data) {
-    var content = template.renderString(data);
+  void write(
+      FileWriter writer, String filename, TemplateData data, String content) {
     if (!options.useBaseHref) {
-      content = content.replaceAll(HTMLBASE_PLACEHOLDER, data.htmlBase);
+      content = content.replaceAll(htmlBasePlaceholder, data.htmlBase);
     }
     writer.write(filename, content,
         element: data.self is Warnable ? data.self : null);
@@ -85,12 +107,16 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
   @override
   void generateCategoryJson(
       FileWriter writer, List<Categorization> categories) {
-    var json = generator_util.generateCategoryJson(
-        categories, options.prettyIndexJson);
-    if (!options.useBaseHref) {
-      json = json.replaceAll(HTMLBASE_PLACEHOLDER, '');
+    var json = '[]';
+    if (categories.isNotEmpty) {
+      json = generator_util.generateCategoryJson(
+          categories, options.prettyIndexJson);
+      if (!options.useBaseHref) {
+        json = json.replaceAll(htmlBasePlaceholder, '');
+      }
     }
-    writer.write(path.join('categories.json'), '${json}\n');
+
+    writer.write(_pathContext.join('categories.json'), '$json\n');
   }
 
   @override
@@ -98,22 +124,24 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
     var json = generator_util.generateSearchIndexJson(
         indexedElements, options.prettyIndexJson);
     if (!options.useBaseHref) {
-      json = json.replaceAll(HTMLBASE_PLACEHOLDER, '');
+      json = json.replaceAll(htmlBasePlaceholder, '');
     }
-    writer.write(path.join('index.json'), '${json}\n');
+    writer.write(_pathContext.join('index.json'), '$json\n');
   }
 
   @override
   void generatePackage(FileWriter writer, PackageGraph graph, Package package) {
     TemplateData data = PackageTemplateData(options, graph, package);
-    render(writer, package.filePath, templates.indexTemplate, data);
+    var content = renderIndex(data, templates.indexTemplate);
+    write(writer, package.filePath, data, content);
   }
 
   @override
   void generateCategory(
       FileWriter writer, PackageGraph packageGraph, Category category) {
     TemplateData data = CategoryTemplateData(options, packageGraph, category);
-    render(writer, category.filePath, templates.categoryTemplate, data);
+    var content = renderCategory(data, templates.categoryTemplate);
+    write(writer, category.filePath, data, content);
   }
 
   @override
@@ -121,7 +149,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       FileWriter writer, PackageGraph packageGraph, Library lib) {
     TemplateData data = LibraryTemplateData(
         options, packageGraph, lib, sidebarForLibrary.getRenderFor);
-    render(writer, lib.filePath, templates.libraryTemplate, data);
+    var content = renderLibrary(data, templates.libraryTemplate);
+    write(writer, lib.filePath, data, content);
   }
 
   @override
@@ -129,7 +158,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       FileWriter writer, PackageGraph packageGraph, Library lib, Class clazz) {
     TemplateData data = ClassTemplateData(options, packageGraph, lib, clazz,
         sidebarForLibrary.getRenderFor, sidebarForContainer.getRenderFor);
-    render(writer, clazz.filePath, templates.classTemplate, data);
+    var content = renderClass(data, templates.classTemplate);
+    write(writer, clazz.filePath, data, content);
   }
 
   @override
@@ -142,7 +172,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
         extension,
         sidebarForLibrary.getRenderFor,
         sidebarForContainer.getRenderFor);
-    render(writer, extension.filePath, templates.extensionTemplate, data);
+    var content = renderExtension(data, templates.extensionTemplate);
+    write(writer, extension.filePath, data, content);
   }
 
   @override
@@ -150,7 +181,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       FileWriter writer, PackageGraph packageGraph, Library lib, Mixin mixin) {
     TemplateData data = MixinTemplateData(options, packageGraph, lib, mixin,
         sidebarForLibrary.getRenderFor, sidebarForContainer.getRenderFor);
-    render(writer, mixin.filePath, templates.mixinTemplate, data);
+    var content = renderMixin(data, templates.mixinTemplate);
+    write(writer, mixin.filePath, data, content);
   }
 
   @override
@@ -158,8 +190,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       Library lib, Class clazz, Constructor constructor) {
     TemplateData data = ConstructorTemplateData(options, packageGraph, lib,
         clazz, constructor, sidebarForContainer.getRenderFor);
-
-    render(writer, constructor.filePath, templates.constructorTemplate, data);
+    var content = renderConstructor(data, templates.constructorTemplate);
+    write(writer, constructor.filePath, data, content);
   }
 
   @override
@@ -167,8 +199,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       FileWriter writer, PackageGraph packageGraph, Library lib, Enum eNum) {
     TemplateData data = EnumTemplateData(options, packageGraph, lib, eNum,
         sidebarForLibrary.getRenderFor, sidebarForContainer.getRenderFor);
-
-    render(writer, eNum.filePath, templates.enumTemplate, data);
+    var content = renderEnum(data, templates.enumTemplate);
+    write(writer, eNum.filePath, data, content);
   }
 
   @override
@@ -176,8 +208,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       Library lib, ModelFunction function) {
     TemplateData data = FunctionTemplateData(
         options, packageGraph, lib, function, sidebarForLibrary.getRenderFor);
-
-    render(writer, function.filePath, templates.functionTemplate, data);
+    var content = renderFunction(data, templates.functionTemplate);
+    write(writer, function.filePath, data, content);
   }
 
   @override
@@ -185,8 +217,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       Container clazz, Method method) {
     TemplateData data = MethodTemplateData(options, packageGraph, lib, clazz,
         method, sidebarForContainer.getRenderFor);
-
-    render(writer, method.filePath, templates.methodTemplate, data);
+    var content = renderMethod(data, templates.methodTemplate);
+    write(writer, method.filePath, data, content);
   }
 
   @override
@@ -199,8 +231,8 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       Library lib, Container clazz, Field property) {
     TemplateData data = PropertyTemplateData(options, packageGraph, lib, clazz,
         property, sidebarForContainer.getRenderFor);
-
-    render(writer, property.filePath, templates.propertyTemplate, data);
+    var content = renderProperty(data, templates.propertyTemplate);
+    write(writer, property.filePath, data, content);
   }
 
   @override
@@ -208,8 +240,9 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       Library lib, TopLevelVariable property) {
     TemplateData data = TopLevelPropertyTemplateData(
         options, packageGraph, lib, property, sidebarForLibrary.getRenderFor);
-
-    render(writer, property.filePath, templates.topLevelPropertyTemplate, data);
+    var content =
+        renderTopLevelProperty(data, templates.topLevelPropertyTemplate);
+    write(writer, property.filePath, data, content);
   }
 
   @override
@@ -222,10 +255,11 @@ abstract class DartdocGeneratorBackend implements GeneratorBackend {
       Library lib, Typedef typeDef) {
     TemplateData data = TypedefTemplateData(
         options, packageGraph, lib, typeDef, sidebarForLibrary.getRenderFor);
-
-    render(writer, typeDef.filePath, templates.typeDefTemplate, data);
+    var content = renderTypedef(data, templates.typeDefTemplate);
+    write(writer, typeDef.filePath, data, content);
   }
 
   @override
-  void generateAdditionalFiles(FileWriter writer, PackageGraph graph) {}
+  Future<void> generateAdditionalFiles(
+      FileWriter writer, PackageGraph graph) async {}
 }

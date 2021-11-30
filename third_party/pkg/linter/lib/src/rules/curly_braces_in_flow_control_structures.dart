@@ -13,11 +13,11 @@ const _details = r'''
 
 **DO** use curly braces for all flow control structures.
 
-Doing so avoids the [dangling else](http://en.wikipedia.org/wiki/Dangling_else)
+Doing so avoids the [dangling else](https://en.wikipedia.org/wiki/Dangling_else)
 problem.
 
 **GOOD:**
-```
+```dart
 if (isWeekDay) {
   print('Bike to work!');
 } else {
@@ -30,14 +30,14 @@ the entire `if` statement and the then body all fit in one line. In that case,
 you may leave off the braces if you prefer:
 
 **GOOD:**
-```
+```dart
 if (arg == null) return defaultValue;
 ```
 
 If the body wraps to the next line, though, use braces:
 
 **GOOD:**
-```
+```dart
 if (overflowChars != other.overflowChars) {
   return overflowChars < other.overflowChars;
 }
@@ -92,8 +92,10 @@ class _Visitor extends SimpleAstVisitor {
       if (node.thenStatement is Block) return;
 
       final unit = node.root as CompilationUnit;
-      if (unit.lineInfo.getLocation(node.rightParenthesis.end).lineNumber !=
-          unit.lineInfo.getLocation(node.thenStatement.end).lineNumber) {
+      var lineInfo = unit.lineInfo;
+      if (lineInfo != null &&
+          lineInfo.getLocation(node.rightParenthesis.end).lineNumber !=
+              lineInfo.getLocation(node.thenStatement.end).lineNumber) {
         rule.reportLint(node.thenStatement);
       }
     } else {

@@ -19,7 +19,7 @@ Although Dart supports two syntaxes of doc comments (`///` and `/**`), we
 prefer using `///` for doc comments.
 
 **GOOD:**
-```
+```dart
 /// Parses a set of option strings. For each option:
 ///
 /// * If it is `null`, then it is ignored.
@@ -36,7 +36,7 @@ Within a doc comment, you can use markdown for formatting.
 
 bool isJavaStyle(Comment comment) {
   var tokens = comment.tokens;
-  if (tokens == null || tokens.isEmpty) {
+  if (tokens.isEmpty) {
     return false;
   }
   //Should be only one
@@ -78,7 +78,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   _Visitor(this.rule);
 
-  void checkComment(Comment comment) {
+  void checkComment(Comment? comment) {
     if (comment != null && isJavaStyle(comment)) {
       rule.reportLint(comment);
     }

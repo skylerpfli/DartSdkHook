@@ -24,7 +24,7 @@ no concept of "uninitialized memory" in Dart.  Adding `= null` is redundant and
 unneeded.
 
 **GOOD:**
-```
+```dart
 int _nextId;
 
 class LazyId {
@@ -40,7 +40,7 @@ class LazyId {
 ```
 
 **BAD:**
-```
+```dart
 int _nextId = null;
 
 class LazyId {
@@ -83,22 +83,28 @@ class _Visitor extends SimpleAstVisitor<void> {
       : nnbdEnabled = context.isEnabled(Feature.non_nullable);
 
   bool isNullable(DartType type) =>
-      !nnbdEnabled || (type != null && context.typeSystem.isNullable(type));
+      !nnbdEnabled || (context.typeSystem.isNullable(type));
 
   @override
   void visitDefaultFormalParameter(DefaultFormalParameter node) {
+    var declaredElement = node.declaredElement;
+    if (declaredElement == null) {
+      return;
+    }
     if (DartTypeUtilities.isNullLiteral(node.defaultValue) &&
-        isNullable(node.declaredElement.type)) {
+        isNullable(declaredElement.type)) {
       rule.reportLint(node);
     }
   }
 
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
-    if (!node.isConst &&
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null &&
+        !node.isConst &&
         !node.isFinal &&
         DartTypeUtilities.isNullLiteral(node.initializer) &&
-        isNullable(node.declaredElement.type)) {
+        isNullable(declaredElement.type)) {
       rule.reportLint(node);
     }
   }

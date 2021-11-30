@@ -23,7 +23,7 @@ files within `lib/` directory outside of it. (for example `test/`)
 
 **GOOD:**
 
-```
+```dart
 import 'package:foo/bar.dart';
 
 import 'package:foo/baz.dart';
@@ -34,7 +34,7 @@ import 'package:foo/src/baz.dart';
 
 **BAD:**
 
-```
+```dart
 import 'baz.dart';
 
 import 'src/bag.dart'
@@ -73,12 +73,10 @@ class _Visitor extends SimpleAstVisitor<void> {
   _Visitor(this.rule, this.context);
 
   bool isRelativeImport(ImportDirective node) {
-    try {
-      final uri = Uri.parse(node.uriContent);
-      return uri.scheme.isEmpty;
-      // ignore: avoid_catches_without_on_clauses
-    } catch (e) {
-      // Ignore.
+    var uriContent = node.uriContent;
+    if (uriContent != null) {
+      final uri = Uri.tryParse(uriContent);
+      return uri != null && uri.scheme.isEmpty;
     }
     return false;
   }

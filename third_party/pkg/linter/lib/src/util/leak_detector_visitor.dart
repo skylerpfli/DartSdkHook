@@ -17,16 +17,25 @@ _PredicateBuilder _hasConstructorFieldInitializers = (VariableDeclaration v) =>
         n is ConstructorFieldInitializer &&
         n.fieldName.staticElement == v.name.staticElement;
 
-_PredicateBuilder _hasFieldFormalParameter = (VariableDeclaration v) =>
-    (AstNode n) =>
-        n is FieldFormalParameter &&
-        (n.identifier.staticElement as FieldFormalParameterElement).field ==
-            v.name.staticElement;
+_PredicateBuilder _hasFieldFormalParameter =
+    (VariableDeclaration v) => (AstNode n) {
+          if (n is FieldFormalParameter) {
+            var staticElement = n.identifier.staticElement;
+            return staticElement is FieldFormalParameterElement &&
+                staticElement.field == v.name.staticElement;
+          }
+          return false;
+        };
 
-_PredicateBuilder _hasReturn = (VariableDeclaration v) => (AstNode n) =>
-    n is ReturnStatement &&
-    n.expression is SimpleIdentifier &&
-    (n.expression as SimpleIdentifier).staticElement == v.name.staticElement;
+_PredicateBuilder _hasReturn = (VariableDeclaration v) => (AstNode n) {
+      if (n is ReturnStatement) {
+        var expression = n.expression;
+        if (expression is SimpleIdentifier) {
+          return expression.staticElement == v.name.staticElement;
+        }
+      }
+      return false;
+    };
 
 /// Builds a function that reports the variable node if the set of nodes
 /// inside the [container] node is empty for all the predicates resulting
@@ -38,8 +47,10 @@ _VisitVariableDeclaration _buildVariableReporter(
         LintRule rule,
         Map<DartTypePredicate, String> predicates) =>
     (VariableDeclaration variable) {
-      if (!predicates.keys
-          .any((DartTypePredicate p) => p(variable.declaredElement.type))) {
+      if (!predicates.keys.any((DartTypePredicate p) {
+        var declaredElement = variable.declaredElement;
+        return declaredElement != null && p(declaredElement.type);
+      })) {
         return;
       }
 
@@ -72,10 +83,12 @@ _VisitVariableDeclaration _buildVariableReporter(
 Iterable<AstNode> _findMethodCallbackNodes(Iterable<AstNode> containerNodes,
     VariableDeclaration variable, Map<DartTypePredicate, String> predicates) {
   final prefixedIdentifiers = containerNodes.whereType<PrefixedIdentifier>();
-  return prefixedIdentifiers.where((n) =>
-      n.prefix.staticElement == variable.name.staticElement &&
-      _hasMatch(predicates, variable.declaredElement.type,
-          n.identifier.token.lexeme));
+  return prefixedIdentifiers.where((n) {
+    var declaredElement = variable.declaredElement;
+    return declaredElement != null &&
+        n.prefix.staticElement == variable.name.staticElement &&
+        _hasMatch(predicates, declaredElement.type, n.identifier.token.lexeme);
+  });
 }
 
 Iterable<AstNode> _findMethodInvocationsWithVariableAsArgument(
@@ -91,16 +104,18 @@ Iterable<AstNode> _findNodesInvokingMethodOnVariable(
         Iterable<AstNode> classNodes,
         VariableDeclaration variable,
         Map<DartTypePredicate, String> predicates) =>
-    classNodes.where((AstNode n) =>
-        n is MethodInvocation &&
-        ((_hasMatch(predicates, variable.declaredElement.type,
-                    n.methodName.name) &&
-                (_isSimpleIdentifierElementEqualToVariable(
-                        n.realTarget, variable) ||
-                    _isPropertyAccessThroughThis(n.realTarget, variable) ||
-                    (n.thisOrAncestorMatching((a) => a == variable) !=
-                        null))) ||
-            (_isInvocationThroughCascadeExpression(n, variable))));
+    classNodes.where((AstNode n) {
+      var declaredElement = variable.declaredElement;
+      return declaredElement != null &&
+          n is MethodInvocation &&
+          ((_hasMatch(predicates, declaredElement.type, n.methodName.name) &&
+                  (_isSimpleIdentifierElementEqualToVariable(
+                          n.realTarget, variable) ||
+                      _isPropertyAccessThroughThis(n.realTarget, variable) ||
+                      (n.thisOrAncestorMatching((a) => a == variable) !=
+                          null))) ||
+              (_isInvocationThroughCascadeExpression(n, variable)));
+    });
 
 Iterable<AstNode> _findVariableAssignments(
     Iterable<AstNode> containerNodes, VariableDeclaration variable) {
@@ -130,7 +145,7 @@ bool _hasMatch(Map<DartTypePredicate, String> predicates, DartType type,
             previous || p(type) && predicates[p] == methodName);
 
 bool _isElementEqualToVariable(
-    Element propertyElement, VariableDeclaration variable) {
+    Element? propertyElement, VariableDeclaration variable) {
   var variableElement = variable.declaredElement;
   return propertyElement == variableElement ||
       propertyElement is PropertyAccessorElement &&
@@ -153,23 +168,23 @@ bool _isInvocationThroughCascadeExpression(
   return false;
 }
 
-bool _isPropertyAccessThroughThis(Expression n, VariableDeclaration variable) {
+bool _isPropertyAccessThroughThis(Expression? n, VariableDeclaration variable) {
   if (n is! PropertyAccess) {
     return false;
   }
 
-  var target = (n as PropertyAccess).realTarget;
+  var target = n.realTarget;
   if (target is! ThisExpression) {
     return false;
   }
 
-  var property = (n as PropertyAccess).propertyName;
+  var property = n.propertyName;
   var propertyElement = property.staticElement;
   return _isElementEqualToVariable(propertyElement, variable);
 }
 
 bool _isSimpleIdentifierElementEqualToVariable(
-        AstNode n, VariableDeclaration variable) =>
+        AstNode? n, VariableDeclaration variable) =>
     n is SimpleIdentifier &&
     _isElementEqualToVariable(n.staticElement, variable);
 
@@ -198,14 +213,18 @@ abstract class LeakDetectorProcessors extends SimpleAstVisitor<void> {
   @override
   void visitFieldDeclaration(FieldDeclaration node) {
     final unit = getCompilationUnit(node);
-    node.fields.variables.forEach(_buildVariableReporter(
-        unit, _fieldPredicateBuilders, rule, predicates));
+    if (unit != null) {
+      node.fields.variables.forEach(_buildVariableReporter(
+          unit, _fieldPredicateBuilders, rule, predicates));
+    }
   }
 
   @override
   void visitVariableDeclarationStatement(VariableDeclarationStatement node) {
     final function = node.thisOrAncestorOfType<FunctionBody>();
-    node.variables.variables.forEach(_buildVariableReporter(
-        function, _variablePredicateBuilders, rule, predicates));
+    if (function != null) {
+      node.variables.variables.forEach(_buildVariableReporter(
+          function, _variablePredicateBuilders, rule, predicates));
+    }
   }
 }

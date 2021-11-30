@@ -20,13 +20,13 @@ It's a good practice to expose the ability to provide a key when creating public
 widgets.
 
 **BAD:**
-```
+```dart
 class MyPublicWidget extends StatelessWidget {
 }
 ```
 
 **GOOD:**
-```
+```dart
 class MyPublicWidget extends StatelessWidget {
   MyPublicWidget({Key key}) : super(key: key);
 }
@@ -58,7 +58,8 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitClassDeclaration(ClassDeclaration node) {
     var classElement = node.declaredElement;
-    if (classElement.isPublic &&
+    if (classElement != null &&
+        classElement.isPublic &&
         hasWidgetAsAscendant(classElement) &&
         classElement.constructors.where((e) => !e.isSynthetic).isEmpty) {
       rule.reportLint(node.name);
@@ -69,19 +70,29 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
     var constructorElement = node.declaredElement;
+    if (constructorElement == null) {
+      return;
+    }
     var classElement = constructorElement.enclosingElement;
     if (constructorElement.isPublic &&
         !constructorElement.isFactory &&
         classElement.isPublic &&
         hasWidgetAsAscendant(classElement) &&
         !isExactWidget(classElement) &&
-        !node.initializers.any((initializer) =>
-            initializer is SuperConstructorInvocation &&
-                (!_defineKeyParameter(initializer.staticElement) ||
-                    _defineKeyArgument(initializer.argumentList)) ||
-            initializer is RedirectingConstructorInvocation &&
-                (!_defineKeyParameter(initializer.staticElement) ||
-                    _defineKeyArgument(initializer.argumentList)))) {
+        !node.initializers.any((initializer) {
+          if (initializer is SuperConstructorInvocation) {
+            var staticElement = initializer.staticElement;
+            return staticElement != null &&
+                (!_defineKeyParameter(staticElement) ||
+                    _defineKeyArgument(initializer.argumentList));
+          } else if (initializer is RedirectingConstructorInvocation) {
+            var staticElement = initializer.staticElement;
+            return staticElement != null &&
+                (!_defineKeyParameter(staticElement) ||
+                    _defineKeyArgument(initializer.argumentList));
+          }
+          return false;
+        })) {
       rule.reportLintForToken(node.firstTokenAfterCommentAndMetadata);
     }
     super.visitConstructorDeclaration(node);
@@ -90,8 +101,8 @@ class _Visitor extends SimpleAstVisitor<void> {
   bool _defineKeyParameter(ConstructorElement element) =>
       element.parameters.any((e) => e.name == 'key' && _isKeyType(e.type));
 
-  bool _defineKeyArgument(ArgumentList argumentList) =>
-      argumentList.arguments.any((a) => a.staticParameterElement.name == 'key');
+  bool _defineKeyArgument(ArgumentList argumentList) => argumentList.arguments
+      .any((a) => a.staticParameterElement?.name == 'key');
 
   bool _isKeyType(DartType type) =>
       DartTypeUtilities.implementsInterface(type, 'Key', '');

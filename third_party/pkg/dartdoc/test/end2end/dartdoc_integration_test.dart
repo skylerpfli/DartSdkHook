@@ -71,7 +71,7 @@ void main() {
           perLine: outputLines.add, workingDirectory: _testPackagePath);
       expect(outputLines, isNot(contains(matches('^parsing'))));
       expect(outputLines, contains(matches('^  warning:')));
-      expect(outputLines.last, matches(r'^found \d+ warnings and \d+ errors'));
+      expect(outputLines.last, matches(r'^Found \d+ warnings and \d+ errors'));
       expect(outputDir.listSync(), isEmpty);
     }, timeout: Timeout.factor(2));
 
@@ -84,7 +84,7 @@ void main() {
           perLine: outputLines.add, workingDirectory: _testPackagePath);
       expect(outputLines, isNot(contains(matches('^parsing'))));
       expect(outputLines, contains(matches('^  warning:')));
-      expect(outputLines.last, matches(r'^found \d+ warnings and \d+ errors'));
+      expect(outputLines.last, matches(r'^Found \d+ warnings and \d+ errors'));
       expect(outputDir.listSync(), isNotEmpty);
     }, timeout: Timeout.factor(2));
 
@@ -107,7 +107,7 @@ void main() {
     });
 
     test('missing a required file path prints a fatal-error', () async {
-      var outputLines = [];
+      var outputLines = <String>[];
       var impossiblePath = path.join(dartdocPath, 'impossible');
       await expectLater(
           () => subprocessLauncher.runStreamed(
@@ -122,7 +122,7 @@ void main() {
       expect(
           outputLines.firstWhere((l) => l.startsWith(' fatal')),
           startsWith(
-              ' fatal error: Argument --input, set to ${impossiblePath}, resolves to missing path: '));
+              ' fatal error: Argument --input, set to $impossiblePath, resolves to missing path: '));
     });
 
     test('errors cause non-zero exit when warnings are off', () async {
@@ -153,9 +153,9 @@ void main() {
     test('Validate missing FLUTTER_ROOT exception is clean', () async {
       var output = StringBuffer();
       var args = <String>[dartdocPath];
-      var dart_tool =
+      var dartTool =
           Directory(path.join(_testPackageFlutterPluginPath, '.dart_tool'));
-      if (dart_tool.existsSync()) dart_tool.deleteSync(recursive: true);
+      if (dartTool.existsSync()) dartTool.deleteSync(recursive: true);
       Future run = subprocessLauncher.runStreamed(
           Platform.resolvedExecutable, args,
           environment: Map.from(Platform.environment)..remove('FLUTTER_ROOT'),
@@ -212,7 +212,7 @@ void main() {
 
       var args = <String>[
         dartdocPath,
-        '--footer-text=${footerTextPath}',
+        '--footer-text=$footerTextPath',
         '--include',
         'ex',
         '--output',

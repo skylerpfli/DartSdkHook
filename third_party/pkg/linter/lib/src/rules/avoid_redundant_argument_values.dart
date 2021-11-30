@@ -15,7 +15,7 @@ const _details = r'''Avoid redundant argument values.
 corresponding parameter.
 
 **BAD:**
-```
+```dart
 void f({bool valWithDefault = true, bool val}) {
   ...
 }
@@ -26,7 +26,7 @@ void main() {
 ```
 
 **GOOD:**
-```
+```dart
 void f({bool valWithDefault = true, bool val}) {
   ...
 }
@@ -78,7 +78,7 @@ class _Visitor extends SimpleAstVisitor {
       final value = param.computeConstantValue();
       if (value != null) {
         if (arg is NamedExpression) {
-          arg = (arg as NamedExpression).expression;
+          arg = arg.expression;
         }
         final expressionValue = context.evaluateConstant(arg);
         if (expressionValue.value == value) {

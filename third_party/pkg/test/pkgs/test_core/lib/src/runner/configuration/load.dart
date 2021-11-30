@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:boolean_selector/boolean_selector.dart';
 import 'package:glob/glob.dart';
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 import 'package:yaml/yaml.dart';
@@ -186,12 +187,12 @@ class _ConfigurationLoader {
     var skipRaw = _getValue('skip', 'boolean or string',
         (value) => (value is bool?) || value is String?);
     String? skipReason;
-    bool skip;
+    bool? skip;
     if (skipRaw is String) {
       skipReason = skipRaw;
       skip = true;
     } else {
-      skip = skipRaw as bool;
+      skip = skipRaw as bool?;
     }
 
     var testOn = _parsePlatformSelector('test_on');
@@ -299,8 +300,8 @@ class _ConfigurationLoader {
 
     var runtimes = <String, RuntimeSettings>{};
     runtimesNode.nodes.forEach((identifierNode, valueNode) {
-      var identifier = _parseIdentifierLike(
-          identifierNode as YamlNode, 'Platform identifier');
+      var yamlNode = identifierNode as YamlNode;
+      var identifier = _parseIdentifierLike(yamlNode, 'Platform identifier');
 
       _validate(valueNode, 'Platform definition must be a map.',
           (value) => value is Map);
@@ -309,8 +310,8 @@ class _ConfigurationLoader {
       var settings = _expect(map, 'settings');
       _validate(settings, 'Must be a map.', (value) => value is Map);
 
-      runtimes[identifier] = RuntimeSettings(
-          identifier, identifierNode.span, [settings as YamlMap]);
+      runtimes[identifier] =
+          RuntimeSettings(identifier, yamlNode.span, [settings as YamlMap]);
     });
     return runtimes;
   }
@@ -417,8 +418,8 @@ class _ConfigurationLoader {
 
     var runtimes = <String, CustomRuntime>{};
     runtimesNode.nodes.forEach((identifierNode, valueNode) {
-      var identifier = _parseIdentifierLike(
-          identifierNode as YamlNode, 'Platform identifier');
+      var yamlNode = identifierNode as YamlNode;
+      var identifier = _parseIdentifierLike(yamlNode, 'Platform identifier');
 
       _validate(valueNode, 'Platform definition must be a map.',
           (value) => value is Map);
@@ -435,7 +436,7 @@ class _ConfigurationLoader {
       _validate(settings, 'Must be a map.', (value) => value is Map);
 
       runtimes[identifier] = CustomRuntime(name, nameNode.span, identifier,
-          identifierNode.span, parent, parentNode.span, settings as YamlMap);
+          yamlNode.span, parent, parentNode.span, settings as YamlMap);
     });
     return runtimes;
   }
@@ -454,7 +455,7 @@ class _ConfigurationLoader {
   Object? _getValue(
       String field, String typeName, bool Function(dynamic) typeTest) {
     var value = _document[field];
-    if (typeTest(value)) return value;
+    if (value == null || typeTest(value)) return value;
     _error('$field must be ${a(typeName)}.', field);
   }
 
@@ -644,6 +645,7 @@ class _ConfigurationLoader {
   }
 
   /// Throws a [SourceSpanFormatException] with [message] about [field].
+  @alwaysThrows
   void _error(String message, String field) {
     throw SourceSpanFormatException(
         message, _document.nodes[field]!.span, _source);

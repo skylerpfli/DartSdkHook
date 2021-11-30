@@ -16,14 +16,14 @@ const _details = r'''
 their body.
 
 **GOOD:**
-```
+```dart
 class A {
   A(int a) : assert(a != null);
 }
 ```
 
 **BAD:**
-```
+```dart
 class A {
   A(int a) {
     assert(a != null);
@@ -52,7 +52,7 @@ class PreferAssertsInInitializerLists extends LintRule implements NodeLintRule {
 
 class _AssertVisitor extends RecursiveAstVisitor {
   final ConstructorElement constructorElement;
-  final _ClassAndSuperClasses classAndSuperClasses;
+  final _ClassAndSuperClasses? classAndSuperClasses;
 
   bool needInstance = false;
 
@@ -81,16 +81,20 @@ class _AssertVisitor extends RecursiveAstVisitor {
     needInstance = true;
   }
 
-  bool _hasAccessor(PropertyAccessorElement element) =>
-      classAndSuperClasses.classes.contains(element.enclosingElement);
+  bool _hasAccessor(PropertyAccessorElement element) {
+    var classes = classAndSuperClasses?.classes;
+    return classes != null && classes.contains(element.enclosingElement);
+  }
 
-  bool _hasMethod(MethodElement element) =>
-      classAndSuperClasses.classes.contains(element.enclosingElement);
+  bool _hasMethod(MethodElement element) {
+    var classes = classAndSuperClasses?.classes;
+    return classes != null && classes.contains(element.enclosingElement);
+  }
 }
 
 /// Lazy cache of elements.
 class _ClassAndSuperClasses {
-  final ClassElement element;
+  final ClassElement? element;
   final Set<ClassElement> _classes = {};
 
   _ClassAndSuperClasses(this.element);
@@ -98,7 +102,7 @@ class _ClassAndSuperClasses {
   /// The [element] and its super classes, including mixins.
   Set<ClassElement> get classes {
     if (_classes.isEmpty) {
-      void addRecursively(ClassElement element) {
+      void addRecursively(ClassElement? element) {
         if (element != null && _classes.add(element)) {
           element.mixins.forEach((t) => addRecursively(t.element));
           addRecursively(element.supertype?.element);
@@ -115,7 +119,7 @@ class _ClassAndSuperClasses {
 class _Visitor extends SimpleAstVisitor<void> {
   final LintRule rule;
 
-  _ClassAndSuperClasses _classAndSuperClasses;
+  _ClassAndSuperClasses? _classAndSuperClasses;
 
   _Visitor(this.rule);
 
@@ -126,7 +130,8 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
-    if (node.declaredElement.isFactory) return;
+    var declaredElement = node.declaredElement;
+    if (declaredElement == null || declaredElement.isFactory) return;
 
     final body = node.body;
     if (body is BlockFunctionBody) {
@@ -134,7 +139,7 @@ class _Visitor extends SimpleAstVisitor<void> {
         if (statement is! AssertStatement) break;
 
         final assertVisitor =
-            _AssertVisitor(node.declaredElement, _classAndSuperClasses);
+            _AssertVisitor(declaredElement, _classAndSuperClasses);
         statement.visitChildren(assertVisitor);
         if (!assertVisitor.needInstance) {
           rule.reportLintForToken(statement.beginToken);

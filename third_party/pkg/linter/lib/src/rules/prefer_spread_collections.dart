@@ -20,7 +20,7 @@ collection, spread collection syntax leads to simpler code.
 
 **BAD:**
 
-```
+```dart
 Widget build(BuildContext context) {
   return CupertinoPageScaffold(
     child: ListView(
@@ -32,12 +32,12 @@ Widget build(BuildContext context) {
 }
 ```
 
-```
+```dart
 var ints = [1, 2, 3];
 print(['a']..addAll(ints.map((i) => i.toString()))..addAll(['c']));
 ```
 
-```
+```dart
 var things;
 var l = ['a']..addAll(things ?? const []);
 ```
@@ -45,7 +45,7 @@ var l = ['a']..addAll(things ?? const []);
 
 **GOOD:**
 
-```
+```dart
 Widget build(BuildContext context) {
   return CupertinoPageScaffold(
     child: ListView(
@@ -58,12 +58,12 @@ Widget build(BuildContext context) {
 }
 ```
 
-```
+```dart
 var ints = [1, 2, 3];
 print(['a', ...ints.map((i) => i.toString()), 'c');
 ```
 
-```
+```dart
 var things;
 var l = ['a', ...?things];
 ```
@@ -99,12 +99,12 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
 
     final cascade = invocation.thisOrAncestorOfType<CascadeExpression>();
-    final sections = cascade.cascadeSections;
-    final target = cascade.target;
+    final sections = cascade?.cascadeSections;
+    final target = cascade?.target;
     // todo (pq): add support for Set literals.
     if (target is! ListLiteral ||
         (target is ListLiteralImpl && target.inConstantContext) ||
-        sections[0] != invocation) {
+        (sections != null && sections[0] != invocation)) {
       return;
     }
 

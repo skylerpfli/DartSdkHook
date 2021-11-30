@@ -15,12 +15,12 @@ const _details = r'''
 **AVOID** using a parameter name that is the same as an existing type.
 
 **BAD:**
-```
+```dart
 m(f(int));
 ```
 
 **GOOD:**
-```
+```dart
 m(f(int v));
 ```
 
@@ -62,9 +62,13 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (node.parent is GenericFunctionType) return;
 
     for (final parameter in node.parameters) {
-      if (parameter.declaredElement.hasImplicitType &&
-          _isTypeName(node, parameter.identifier)) {
-        rule.reportLint(parameter.identifier);
+      var declaredElement = parameter.declaredElement;
+      var identifier = parameter.identifier;
+      if (declaredElement != null &&
+          identifier != null &&
+          declaredElement.hasImplicitType &&
+          _isTypeName(node, identifier)) {
+        rule.reportLint(identifier);
       }
     }
   }
@@ -73,7 +77,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     final result = context.resolveNameInScope(node.name, false, scope);
     if (result.isRequestedName) {
       final element = result.element;
-      return element is ClassElement || element is FunctionTypeAliasElement;
+      return element is ClassElement || element is TypeAliasElement;
     }
     return false;
   }

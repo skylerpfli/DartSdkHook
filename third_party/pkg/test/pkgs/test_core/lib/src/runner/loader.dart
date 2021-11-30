@@ -259,7 +259,7 @@ class Loader {
           .map(plugin.parsePlatformSettings)
           .reduce(plugin.mergePlatformSettings);
       plugin.customizePlatform(runtime, parsed);
-      _parsedRuntimeSettings[runtime] = parsed!;
+      _parsedRuntimeSettings[runtime] = parsed;
     } else {
       String identifier;
       SourceSpan span;

@@ -6,6 +6,7 @@ import 'dart:collection';
 
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
+
 import '../util/boolean_expression_utilities.dart';
 
 void _addNodeComparisons(Expression node, Set<Expression> comparisons) {
@@ -68,7 +69,7 @@ bool _sameOperands(String eLeftOperand, String bcLeftOperand,
 typedef _RecurseCallback = void Function(Expression expression);
 
 class ContradictoryComparisons {
-  final Expression first;
+  final Expression? first;
   final Expression second;
 
   ContradictoryComparisons(this.first, this.second);
@@ -78,37 +79,43 @@ class TestedExpressions {
   final Expression testingExpression;
   final Set<Expression> truths;
   final Set<Expression> negations;
-  LinkedHashSet<ContradictoryComparisons> _contradictions;
+  LinkedHashSet<ContradictoryComparisons>? _contradictions;
 
   TestedExpressions(this.testingExpression, this.truths, this.negations);
 
-  LinkedHashSet<ContradictoryComparisons> evaluateInvariant() {
+  LinkedHashSet<ContradictoryComparisons>? evaluateInvariant() {
     if (_contradictions != null) {
       return _contradictions;
     }
 
-    final binaryExpression = testingExpression is BinaryExpression
-        ? testingExpression as BinaryExpression
-        : null;
-    var facts = binaryExpression != null
-        ? [binaryExpression.leftOperand, binaryExpression.rightOperand]
-        : [testingExpression];
+    var testingExpression = this.testingExpression;
+
+    final binaryExpression =
+        testingExpression is BinaryExpression ? testingExpression : null;
+
+    Iterable<Expression> facts;
+    if (testingExpression is BinaryExpression) {
+      facts = [testingExpression.leftOperand, testingExpression.rightOperand];
+    } else {
+      facts = [testingExpression];
+    }
+
     _contradictions = _findContradictoryComparisons(
         LinkedHashSet.from(facts),
         binaryExpression != null
             ? binaryExpression.operator.type
             : TokenType.AMPERSAND_AMPERSAND);
 
-    if (_contradictions.isEmpty) {
+    if (_contradictions?.isEmpty == true) {
       final set = (binaryExpression != null
           ? _extractComparisons(testingExpression as BinaryExpression)
           : {testingExpression})
-        ..addAll(truths)
-        ..addAll(negations);
+        ..addAll(truths.whereType<Expression>())
+        ..addAll(negations.whereType<Expression>());
       // Here and in several places we proceed only for
       // TokenType.AMPERSAND_AMPERSAND because we then know that all comparisons
       // must be true.
-      _contradictions.addAll(
+      _contradictions?.addAll(
           _findContradictoryComparisons(set, TokenType.AMPERSAND_AMPERSAND));
     }
 
@@ -125,15 +132,16 @@ class TestedExpressions {
         comparisons.whereType<BinaryExpression>().toSet();
     final contradictions = LinkedHashSet<ContradictoryComparisons>.identity();
 
+    var testingExpression = this.testingExpression;
     if (testingExpression is SimpleIdentifier) {
-      final identifier = testingExpression as SimpleIdentifier;
       bool sameIdentifier(n) =>
-          n is SimpleIdentifier && identifier.staticElement == n.staticElement;
+          n is SimpleIdentifier &&
+          testingExpression.staticElement == n.staticElement;
       if (negations.any(sameIdentifier)) {
         final otherIdentifier =
-            negations.firstWhere(sameIdentifier) as SimpleIdentifier;
+            negations.firstWhere(sameIdentifier) as SimpleIdentifier?;
         contradictions
-            .add(ContradictoryComparisons(otherIdentifier, identifier));
+            .add(ContradictoryComparisons(otherIdentifier, testingExpression));
       }
     }
 
@@ -148,7 +156,6 @@ class TestedExpressions {
       final eOperatorType = expression.operator.type;
       comparisons
           .where((comparison) =>
-              comparison != null &&
               comparison.offset < expression.offset &&
               comparison is BinaryExpression)
           .forEach((Expression c) {
@@ -167,12 +174,13 @@ class TestedExpressions {
             ? BooleanExpressionUtilities
                 .NEGATIONS[otherExpression.operator.type]
             : otherExpression.operator.type;
-        final isNegationOrComparison =
-            _isNegationOrComparison(cOperatorType, eOperatorType, tokenType);
-
-        if (isNegationOrComparison && sameOperands) {
-          contradictions
-              .add(ContradictoryComparisons(otherExpression, expression));
+        if (cOperatorType != null) {
+          final isNegationOrComparison =
+              _isNegationOrComparison(cOperatorType, eOperatorType, tokenType);
+          if (isNegationOrComparison && sameOperands) {
+            contradictions
+                .add(ContradictoryComparisons(otherExpression, expression));
+          }
         }
       });
     });

@@ -1,3 +1,5 @@
+// @dart=2.9
+
 library reexport.somelib;
 
 class SomeClass {}
@@ -12,17 +14,16 @@ class BaseReexported {
   String action;
 }
 
-class ExtendedBaseReexported extends BaseReexported {
-}
+class ExtendedBaseReexported extends BaseReexported {}
 
 /// A private extension.
 extension _Unseen on Object {
-  void doYouSeeMe() { }
+  void doYouSeeMe() {}
 }
 
 /// An extension without a name
 extension on List {
-  void somethingNew() { }
+  void somethingNew() {}
 }
 
 /// [_Unseen] is not seen, but [DocumentMe] is.

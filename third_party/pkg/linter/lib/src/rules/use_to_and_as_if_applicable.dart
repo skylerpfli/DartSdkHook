@@ -20,7 +20,7 @@ From the [design guide](https://dart.dev/guides/language/effective-dart/design):
 **PREFER** naming a method as___() if it returns a different representation backed by the original object.
 
 **BAD:**
-```
+```dart
 class Bar {
   Foo myMethod() {
     return Foo.from(this);
@@ -29,7 +29,7 @@ class Bar {
 ```
 
 **GOOD:**
-```
+```dart
 class Bar {
   Foo toFoo() {
     return Foo.from(this);
@@ -38,7 +38,7 @@ class Bar {
 ```
 
 **GOOD:**
-```
+```dart
 class Bar {
   Foo asFoo() {
     return Foo.from(this);
@@ -53,7 +53,7 @@ bool _beginsWithAsOrTo(String name) {
   return regExp.matchAsPrefix(name) != null;
 }
 
-bool _isVoid(TypeAnnotation returnType) =>
+bool _isVoid(TypeAnnotation? returnType) =>
     returnType is TypeName && returnType.name.name == 'void';
 
 class UseToAndAsIfApplicable extends LintRule implements NodeLintRule {
@@ -79,8 +79,10 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
+    var nodeParameters = node.parameters;
     if (!node.isGetter &&
-        node.parameters.parameters.isEmpty &&
+        nodeParameters != null &&
+        nodeParameters.parameters.isEmpty &&
         !_isVoid(node.returnType) &&
         !_beginsWithAsOrTo(node.name.name) &&
         !DartTypeUtilities.hasInheritedMethod(node) &&
@@ -101,7 +103,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     return false;
   }
 
-  bool _checkExpression(Expression rawExpression) {
+  bool _checkExpression(Expression? rawExpression) {
     final expression = rawExpression?.unParenthesized;
     return expression is InstanceCreationExpression &&
         expression.argumentList.arguments.length == 1 &&

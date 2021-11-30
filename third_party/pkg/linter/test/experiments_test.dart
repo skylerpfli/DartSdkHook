@@ -24,10 +24,9 @@ void main() {
         final ruleTestDir = Directory(p.join(entry.path, 'rules'));
         for (var test in ruleTestDir.listSync()) {
           if (test is! File) continue;
-          final testFile = test as File;
+          final testFile = test;
           final ruleName = p.basenameWithoutExtension(test.path);
-          testRule(ruleName, testFile,
-              analysisOptions: analysisOptions, debug: true);
+          testRule(ruleName, testFile, analysisOptions: analysisOptions);
         }
       });
     }

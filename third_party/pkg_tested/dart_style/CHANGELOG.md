@@ -1,3 +1,27 @@
+# 2.0.1
+
+* Support triple-shift `>>>` and `>>>=` operators (#992).
+* Support non-function type aliases (#993).
+* Correct constructor initializer indentation after `required` (#1010).
+
+# 2.0.0
+
+* Migrate to null safety.
+
+# 1.3.14
+
+* Add support for generic annotations.
+* `FormatCommand.run()` now returns the value set in `exitCode` during
+  formatting.
+
+# 1.3.13
+
+- Allow the latest version of `package:analyzer`.
+
+# 1.3.12
+
+- Allow the latest versions of `package:args` and `package:pub_semver`.
+
 # 1.3.11
 
 * Remove use of deprecated analyzer API and List constructor.

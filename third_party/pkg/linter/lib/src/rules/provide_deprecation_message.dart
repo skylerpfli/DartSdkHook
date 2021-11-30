@@ -15,13 +15,13 @@ const _details = r'''
 removal schedule) in the Deprecation constructor.
 
 **BAD:**
-```
+```dart
 @deprecated
 void oldFunction(arg1, arg2) {}
 ```
 
 **GOOD:**
-```
+```dart
 @Deprecated("""
 [oldFunction] is being deprecated in favor of [newFunction] (with slightly
 different parameters; see [newFunction] for more information). [oldFunction]
@@ -55,7 +55,10 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitAnnotation(Annotation node) {
-    if (node.elementAnnotation.isDeprecated && node.arguments == null) {
+    var elementAnnotation = node.elementAnnotation;
+    if (elementAnnotation != null &&
+        elementAnnotation.isDeprecated &&
+        node.arguments == null) {
       rule.reportLint(node);
     }
   }

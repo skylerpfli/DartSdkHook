@@ -5,7 +5,6 @@
 import 'package:analyzer/file_system/file_system.dart';
 import 'package:dartdoc/src/dartdoc_options.dart';
 import 'package:dartdoc/src/io_utils.dart';
-import 'package:path/path.dart' as p;
 
 import 'model.dart';
 
@@ -46,12 +45,6 @@ enum DocumentLocation {
 mixin MarkdownFileDocumentation implements Documentable, Canonicalization {
   DocumentLocation get documentedWhere;
 
-  @override
-  String get documentation => documentationFile == null
-      ? null
-      : packageGraph.resourceProvider
-          .readAsMalformedAllowedStringSync(documentationFile);
-
   Documentation __documentation;
 
   Documentation get _documentation {
@@ -64,11 +57,16 @@ mixin MarkdownFileDocumentation implements Documentable, Canonicalization {
   String get documentationAsHtml => _documentation.asHtml;
 
   @override
-  bool get hasDocumentation =>
-      documentationFile != null &&
-      packageGraph.resourceProvider
-          .readAsMalformedAllowedStringSync(documentationFile)
-          .isNotEmpty;
+  String get documentation {
+    final docFile = documentationFile;
+    return docFile == null
+        ? null
+        : packageGraph.resourceProvider
+            .readAsMalformedAllowedStringSync(docFile);
+  }
+
+  @override
+  bool get hasDocumentation => documentation?.isNotEmpty == true;
 
   @override
   bool get hasExtendedDocumentation =>
@@ -83,7 +81,9 @@ mixin MarkdownFileDocumentation implements Documentable, Canonicalization {
   File get documentationFile;
 
   @override
-  String get location => p.toUri(documentationFile.path).toString();
+  String get location => packageGraph.resourceProvider.pathContext
+      .toUri(documentationFile.path)
+      .toString();
 
   @override
   Set<String> get locationPieces => <String>{location};

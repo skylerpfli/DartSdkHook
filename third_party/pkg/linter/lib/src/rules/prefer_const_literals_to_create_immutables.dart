@@ -3,13 +3,11 @@
 // BSD-style license that can be found in the LICENSE file.
 
 import 'package:analyzer/dart/ast/ast.dart';
-import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 
 import '../analyzer.dart';
-import '../ast.dart';
 
 const desc =
     'Prefer const literals as parameters of constructors on @immutable classes.';
@@ -20,7 +18,7 @@ const details = '''
 parameters in immutable class instantiations.
 
 **BAD:**
-```
+```dart
 @immutable
 class A {
   A(this.v);
@@ -32,7 +30,7 @@ A a2 = new A({});
 ```
 
 **GOOD:**
-```
+```dart
 A a1 = new A(const [1]);
 A a2 = new A(const {});
 ```
@@ -45,10 +43,10 @@ String _immutableVarName = 'immutable';
 /// The name of `meta` library, used to define analysis annotations.
 String _metaLibName = 'meta';
 
-bool _isImmutable(Element element) =>
+bool _isImmutable(Element? element) =>
     element is PropertyAccessorElement &&
     element.name == _immutableVarName &&
-    element.library?.name == _metaLibName;
+    element.library.name == _metaLibName;
 
 class PreferConstLiteralsToCreateImmutables extends LintRule
     implements NodeLintRule {
@@ -84,7 +82,7 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 
   Iterable<InterfaceType> _getSelfAndInheritedTypes(InterfaceType type) sync* {
-    var current = type;
+    InterfaceType? current = type;
     // TODO(a14n) the is check looks unnecessary but prevents https://github.com/dart-lang/sdk/issues/33210
     // for now it's not clear how this can happen
     while (current != null && current is InterfaceType) {
@@ -93,14 +91,13 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
   }
 
-  bool _hasImmutableAnnotation(DartType type) {
+  bool _hasImmutableAnnotation(DartType? type) {
     if (type is! InterfaceType) {
       // This happens when we find an instance creation expression for a class
       // that cannot be resolved.
       return false;
     }
-    final inheritedAndSelfTypes =
-        _getSelfAndInheritedTypes(type as InterfaceType);
+    final inheritedAndSelfTypes = _getSelfAndInheritedTypes(type);
     final inheritedAndSelfAnnotations = inheritedAndSelfTypes
         .map((type) => type.element)
         .expand((c) => c.metadata)
@@ -112,7 +109,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (literal.isConst) return;
 
     // looking for parent instance creation to check if class is immutable
-    AstNode node = literal;
+    AstNode? node = literal;
     while (node is! InstanceCreationExpression &&
         (node is ParenthesizedExpression ||
             node is ArgumentList ||
@@ -120,26 +117,14 @@ class _Visitor extends SimpleAstVisitor<void> {
             node is SetOrMapLiteral ||
             node is MapLiteralEntry ||
             node is NamedExpression)) {
-      node = node.parent;
+      node = node?.parent;
     }
     if (!(node is InstanceCreationExpression &&
         _hasImmutableAnnotation(node.staticType))) {
       return;
     }
 
-    bool hasConstError;
-
-    // put a fake const keyword and check if there's const error
-    final oldKeyword = literal.constKeyword;
-    literal.constKeyword = KeywordToken(Keyword.CONST, node.offset);
-    try {
-      hasConstError = hasConstantError(context, literal);
-    } finally {
-      // restore old keyword
-      literal.constKeyword = oldKeyword;
-    }
-
-    if (!hasConstError) {
+    if (context.canBeConst(literal)) {
       rule.reportLint(literal);
     }
   }

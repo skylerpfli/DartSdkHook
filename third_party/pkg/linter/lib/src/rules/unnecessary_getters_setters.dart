@@ -30,7 +30,7 @@ getter and setter without having to touch any code that uses that field.
 
 **GOOD:**
 
-```
+```dart
 class Box {
   var contents;
 }
@@ -38,7 +38,7 @@ class Box {
 
 **BAD:**
 
-```
+```dart
 class Box {
   var _contents;
   get contents => _contents;
@@ -89,12 +89,16 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
 
     // Only select getters with setter pairs
-    getters.keys.where((id) => setters.keys.contains(id))
-      ..forEach((id) => _visitGetterSetter(getters[id], setters[id]));
+    getters.keys
+        .where((id) => setters.keys.contains(id))
+        .forEach((id) => _visitGetterSetter(getters[id], setters[id]));
   }
 
-  void _visitGetterSetter(MethodDeclaration getter, MethodDeclaration setter) {
-    if (isSimpleSetter(setter) &&
+  void _visitGetterSetter(
+      MethodDeclaration? getter, MethodDeclaration? setter) {
+    if (getter != null &&
+        setter != null &&
+        isSimpleSetter(setter) &&
         isSimpleGetter(getter) &&
         !isProtected(getter) &&
         !isProtected(setter) &&

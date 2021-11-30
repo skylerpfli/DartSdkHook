@@ -19,7 +19,7 @@ As Dart has the `??=` operator, it is advisable to use it where applicable to
 improve the brevity of your code.
 
 **BAD:**
-```
+```dart
 String get fullName {
   if (_fullName == null) {
     _fullName = getFullUserName(this);
@@ -29,7 +29,7 @@ String get fullName {
 ```
 
 **GOOD:**
-```
+```dart
 String get fullName {
   return _fullName ??= getFullUserName(this);
 }
@@ -52,7 +52,7 @@ bool _checkStatement(Statement statement, Expression condition) {
   return false;
 }
 
-Expression _getExpressionCondition(Expression rawExpression) {
+Expression? _getExpressionCondition(Expression rawExpression) {
   final expression = rawExpression.unParenthesized;
   if (expression is BinaryExpression &&
       expression.operator.type == TokenType.EQ_EQ) {

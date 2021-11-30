@@ -2,9 +2,10 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'package:charcode/ascii.dart';
 import 'package:source_span/source_span.dart';
+import 'package:yaml/src/error_listener.dart';
 
+import 'charcodes.dart';
 import 'equality.dart';
 import 'event.dart';
 import 'parser.dart';
@@ -30,8 +31,10 @@ class Loader {
   FileSpan _span;
 
   /// Creates a loader that loads [source].
-  factory Loader(String source, {Uri? sourceUrl}) {
-    var parser = Parser(source, sourceUrl: sourceUrl);
+  factory Loader(String source,
+      {Uri? sourceUrl, bool recover = false, ErrorListener? errorListener}) {
+    var parser = Parser(source,
+        sourceUrl: sourceUrl, recover: recover, errorListener: errorListener);
     var event = parser.parse();
     assert(event.type == EventType.streamStart);
     return Loader._(parser, event.span);

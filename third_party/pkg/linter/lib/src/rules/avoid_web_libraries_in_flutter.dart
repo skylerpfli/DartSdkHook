@@ -59,23 +59,24 @@ class AvoidWebLibrariesInFlutter extends LintRule implements NodeLintRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
-  File pubspecFile;
+  File? pubspecFile;
 
   final LintRule rule;
-  bool _shouldValidateUri;
+  bool? _shouldValidateUri;
 
   _Visitor(this.rule);
 
   bool get shouldValidateUri => _shouldValidateUri ??= checkForValidation();
 
   bool checkForValidation() {
-    if (pubspecFile == null) {
+    var file = pubspecFile;
+    if (file == null) {
       return false;
     }
 
     YamlMap parsedPubspec;
     try {
-      final content = pubspecFile.readAsStringSync();
+      final content = file.readAsStringSync();
       parsedPubspec = _parseYaml(content);
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {
@@ -108,8 +109,11 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitImportDirective(ImportDirective node) {
-    if (isWebUri(node.uri.stringValue) && shouldValidateUri) {
-      rule.reportLint(node);
+    if (shouldValidateUri) {
+      var uriString = node.uri.stringValue;
+      if (uriString != null && isWebUri(uriString)) {
+        rule.reportLint(node);
+      }
     }
   }
 }

@@ -22,12 +22,12 @@ For instance `1000000000000000001` cannot be represented exactly as a JavaScript
 Number, so `1000000000000000000` will be used instead.
 
 **BAD:**
-```
+```dart
 int value = 9007199254740995;
 ```
 
 **GOOD:**
-```
+```dart
 BigInt value = BigInt.parse('9007199254740995');
 ```
 
@@ -54,7 +54,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   _Visitor(this.rule);
 
-  bool isRounded(int value) => value?.toDouble()?.toInt() != value;
+  bool isRounded(int? value) => value?.toDouble().toInt() != value;
   @override
   void visitIntegerLiteral(IntegerLiteral node) {
     if (isRounded(node.value)) {

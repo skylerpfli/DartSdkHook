@@ -41,7 +41,7 @@ class Class extends Container
       'Dartdoc 1.0.0')
   set supertype(DefinedElementType value) => _supertype = value;
 
-  final List<DefinedElementType> _interfaces;
+  final List<DefinedElementType> _directInterfaces;
 
   Class(ClassElement element, Library library, PackageGraph packageGraph)
       : _mixedInTypes = element.mixins
@@ -52,7 +52,7 @@ class Class extends Container
         _supertype = element.supertype?.element?.supertype == null
             ? null
             : ElementType.from(element.supertype, library, packageGraph),
-        _interfaces = element.interfaces
+        _directInterfaces = element.interfaces
             .map<DefinedElementType>(
                 (f) => ElementType.from(f, library, packageGraph))
             .toList(growable: false),
@@ -113,6 +113,7 @@ class Class extends Container
   Iterable<Constructor> get constructors => element.constructors
       .map((e) => ModelElement.from(e, library, packageGraph) as Constructor);
 
+  @override
   bool get hasPublicConstructors => publicConstructors.isNotEmpty;
 
   @visibleForTesting
@@ -120,6 +121,8 @@ class Class extends Container
       model_utils.filterNonPublic(constructors);
 
   List<Constructor> _publicConstructorsSorted;
+
+  @override
   Iterable<Constructor> get publicConstructorsSorted =>
       _publicConstructorsSorted ??= publicConstructors.toList()..sort(byName);
 
@@ -258,10 +261,46 @@ class Class extends Container
   Iterable<Field> get publicInheritedFields =>
       model_utils.filterNonPublic(inheritedFields);
 
-  List<DefinedElementType> get interfaces => _interfaces;
+  /// Interfaces directly implemented by this class.
+  List<DefinedElementType> get interfaces => _directInterfaces;
 
-  Iterable<DefinedElementType> get publicInterfaces =>
-      model_utils.filterNonPublic(interfaces);
+  /// The public interfaces may include substitutions for intermediate
+  /// private interfaces, and so unlike other public* methods, is not
+  /// a strict subset of [interfaces].
+  Iterable<DefinedElementType> get publicInterfaces sync* {
+    for (var i in _directInterfaces) {
+      /// Do not recurse if we can find an element here.
+      if (i.element.canonicalModelElement != null) {
+        yield i;
+        continue;
+      }
+      // Public types used to be unconditionally exposed here.  However,
+      // if the packages are [DocumentLocation.missing] we generally treat types
+      // defined in them as actually defined in a documented package.
+      // That translates to them being defined here, but in 'src/' or similar,
+      // and so, are now always hidden.
+
+      // This type is not backed by a canonical Class; search
+      // the superchain and publicInterfaces of this interface to pretend
+      // as though the hidden class didn't exist and this class was declared
+      // directly referencing the canonical classes further up the chain.
+      if (i.element is Class) {
+        var hiddenClass = i.element as Class;
+        if (hiddenClass.publicSuperChain.isNotEmpty) {
+          yield hiddenClass.publicSuperChain.first;
+        }
+        yield* hiddenClass.publicInterfaces;
+      } else {
+        assert(
+            false,
+            'Can not handle intermediate non-public interfaces '
+            'created by ModelElements that are not classes or mixins:  '
+            '$fullyQualifiedName contains an interface {$i}, '
+            'defined by ${i.element}');
+        continue;
+      }
+    }
+  }
 
   bool get isAbstract => element.isAbstract;
 
@@ -295,8 +334,11 @@ class Class extends Container
   Iterable<DefinedElementType> get publicMixedInTypes =>
       model_utils.filterNonPublic(mixedInTypes);
 
+  DefinedElementType _modelType;
+
   @override
-  DefinedElementType get modelType => super.modelType;
+  DefinedElementType get modelType =>
+      _modelType ??= ElementType.from(element.thisType, library, packageGraph);
 
   /// Not the same as superChain as it may include mixins.
   /// It's really not even the same as ordinary Dart inheritance, either,
@@ -376,7 +418,7 @@ class Class extends Container
       var cmap = inheritance.getInheritedConcreteMap2(element);
       var imap = inheritance.getInheritedMap2(element);
 
-      var inheritanceChainElements;
+      List<ClassElement> inheritanceChainElements;
 
       var combinedMap = <String, ExecutableElement>{};
       for (var nameObj in cmap.keys) {
@@ -559,11 +601,4 @@ class Class extends Container
 
   @override
   Iterable<Field> get constantFields => allFields.where((f) => f.isConst);
-
-  @override
-  bool operator ==(Object o) =>
-      o is Class &&
-      name == o.name &&
-      o.library.name == library.name &&
-      o.library.package.name == library.package.name;
 }

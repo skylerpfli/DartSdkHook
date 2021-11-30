@@ -2,6 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'package:dartdoc/src/model/feature.dart';
 import 'package:dartdoc/src/model/model_element.dart';
 
 abstract class ModelElementRenderer {
@@ -13,13 +14,18 @@ abstract class ModelElementRenderer {
 
   String renderAnimation(
       String uniqueId, int width, int height, Uri movieUrl, String overlayId);
+
+  String renderFeatures(ModelElement modelElement) {
+    var allFeatures = modelElement.features.toList()..sort(byFeatureOrdering);
+    return allFeatures.map((f) => f.linkedNameWithParameters).join(', ');
+  }
 }
 
 class ModelElementRendererHtml extends ModelElementRenderer {
   @override
   String renderLinkedName(ModelElement modelElement) {
     var cssClass = modelElement.isDeprecated ? ' class="deprecated"' : '';
-    return '<a${cssClass} href="${modelElement.href}">${modelElement.name}</a>';
+    return '<a$cssClass href="${modelElement.href}">${modelElement.name}</a>';
   }
 
   @override
@@ -61,7 +67,7 @@ class ModelElementRendererHtml extends ModelElementRenderer {
     return '''
 
 <div style="position: relative;">
-  <div id="${overlayId}"
+  <div id="$overlayId"
        onclick="var $uniqueId = document.getElementById('$uniqueId');
                 if ($uniqueId.paused) {
                   $uniqueId.play();

@@ -22,7 +22,7 @@ map implementation to function properly.  Thus, when overriding `==`, the
 `hashCode` is overridden, `==` should be also.
 
 **BAD:**
-```
+```dart
 class Bad {
   final int value;
   Bad(this.value);
@@ -33,7 +33,7 @@ class Bad {
 ```
 
 **GOOD:**
-```
+```dart
 class Better {
   final int value;
   Better(this.value);
@@ -77,8 +77,8 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
-    MethodDeclaration eq;
-    ClassMember hash;
+    MethodDeclaration? eq;
+    ClassMember? hash;
     for (var member in node.members) {
       if (isEquals(member)) {
         eq = member as MethodDeclaration;

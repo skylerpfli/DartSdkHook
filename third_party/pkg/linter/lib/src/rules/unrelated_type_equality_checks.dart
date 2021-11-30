@@ -5,6 +5,7 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 
 import '../analyzer.dart';
@@ -24,7 +25,7 @@ likely will return `false` and might not reflect programmer's intent.
 the `int` is on the right hand side. The lint allows this as a special case. 
 
 **BAD:**
-```
+```dart
 void someFunction() {
   var x = '1';
   if (x == 1) print('someFunction'); // LINT
@@ -32,7 +33,7 @@ void someFunction() {
 ```
 
 **BAD:**
-```
+```dart
 void someFunction1() {
   String x = '1';
   if (x == 1) print('someFunction1'); // LINT
@@ -40,7 +41,7 @@ void someFunction1() {
 ```
 
 **BAD:**
-```
+```dart
 void someFunction13(DerivedClass2 instance) {
   var other = DerivedClass3();
 
@@ -59,7 +60,7 @@ class DerivedClass3 extends ClassBase implements Mixin {}
 ```
 
 **GOOD:**
-```
+```dart
 void someFunction2() {
   var x = '1';
   var y = '2';
@@ -68,7 +69,7 @@ void someFunction2() {
 ```
 
 **GOOD:**
-```
+```dart
 void someFunction3() {
   for (var i = 0; i < 10; i++) {
     if (i == 0) print(someFunction3); // OK
@@ -77,7 +78,7 @@ void someFunction3() {
 ```
 
 **GOOD:**
-```
+```dart
 void someFunction4() {
   var x = '1';
   if (x == null) print(someFunction4); // OK
@@ -85,7 +86,7 @@ void someFunction4() {
 ```
 
 **GOOD:**
-```
+```dart
 void someFunction7() {
   List someList;
 
@@ -94,7 +95,7 @@ void someFunction7() {
 ```
 
 **GOOD:**
-```
+```dart
 void someFunction8(ClassBase instance) {
   DerivedClass1 other;
 
@@ -103,7 +104,7 @@ void someFunction8(ClassBase instance) {
 ```
 
 **GOOD:**
-```
+```dart
 void someFunction10(unknown) {
   var what = unknown - 1;
   for (var index = 0; index < unknown; index++) {
@@ -113,7 +114,7 @@ void someFunction10(unknown) {
 ```
 
 **GOOD:**
-```
+```dart
 void someFunction11(Mixin instance) {
   var other = DerivedClass2();
 
@@ -150,7 +151,7 @@ bool _isFixNumIntX(DartType type) {
   if (type is! InterfaceType) {
     return false;
   }
-  final element = type.element;
+  final Element element = type.element;
   return (element.name == 'Int32' || element.name == 'Int64') &&
       element.library?.name == 'fixnum';
 }

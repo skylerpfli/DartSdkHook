@@ -2,6 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:pub_semver/pub_semver.dart';
@@ -31,7 +32,7 @@ void main() async {
   await sinceMap.then((m) => m.entries.forEach(print));
 }
 
-Map<String, SinceInfo> _sinceMap;
+Map<String, SinceInfo>? _sinceMap;
 
 Future<Map<String, SinceInfo>> get sinceMap async =>
     _sinceMap ??= await _getSinceInfo();
@@ -42,7 +43,7 @@ Future<Map<String, SinceInfo>> _getSinceInfo() async {
 
   var sinceMap = <String, SinceInfo>{};
   for (var lint in registeredLints.map((l) => l.name)) {
-    var linterVersion = linterVersionCache[lint] as String;
+    var linterVersion = linterVersionCache[lint] as String?;
     if (linterVersion == null) {
       linterVersion = await findSinceLinter(lint);
       if (linterVersion != null) {
@@ -58,9 +59,9 @@ Future<Map<String, SinceInfo>> _getSinceInfo() async {
   return sinceMap;
 }
 
-Map<String, String> _dartSdkMap;
+Map<String, String>? _dartSdkMap;
 
-Future<Map<String, String>> get dartSdkMap async {
+Future<Map<String, String>?> get dartSdkMap async {
   if (_dartSdkMap == null) {
     var dartSdkCache = await File('tool/since/dart_sdk.yaml').readAsString();
     final yamlMap = loadYamlNode(dartSdkCache) as YamlMap;
@@ -68,12 +69,14 @@ Future<Map<String, String>> get dartSdkMap async {
 
     var sdks = await sdkTags;
     for (var sdk in sdks) {
-      if (!_dartSdkMap.containsKey(sdk)) {
+      if (!_dartSdkMap!.containsKey(sdk)) {
         var linterVersion = await linterForDartSdk(sdk);
-        _dartSdkMap[sdk] = linterVersion;
-        print('fetched...');
-        print('$sdk : $linterVersion');
-        print('(consider caching in tool/since/dart_sdk.yaml)');
+        if (linterVersion != null) {
+          _dartSdkMap![sdk] = linterVersion;
+          print('fetched...');
+          print('$sdk : $linterVersion');
+          print('(consider caching in tool/since/dart_sdk.yaml)');
+        }
       }
     }
   }
@@ -82,7 +85,7 @@ Future<Map<String, String>> get dartSdkMap async {
 
 Version earliestLinterInDart2 = Version.parse('0.1.58');
 
-Future<String> _sinceSdkForLinter(String linterVersionString) async {
+Future<String?> _sinceSdkForLinter(String? linterVersionString) async {
   if (linterVersionString == null) {
     return null;
   }
@@ -94,9 +97,11 @@ Future<String> _sinceSdkForLinter(String linterVersionString) async {
 
   var sdkVersions = <String>[];
   var sdkCache = await dartSdkMap;
-  for (var sdkEntry in sdkCache.entries) {
-    if (Version.parse(sdkEntry.value) == linterVersion) {
-      sdkVersions.add(sdkEntry.key);
+  if (sdkCache != null) {
+    for (var sdkEntry in sdkCache.entries) {
+      if (Version.parse(sdkEntry.value) == linterVersion) {
+        sdkVersions.add(sdkEntry.key);
+      }
     }
   }
   if (sdkVersions.isEmpty) {
@@ -108,29 +113,32 @@ Future<String> _sinceSdkForLinter(String linterVersionString) async {
   return sdkVersions.first;
 }
 
-Future<String> _nextLinterVersion(Version linterVersion) async {
-  for (final version in await linterVersions) {
-    if (Version.parse(version).compareTo(linterVersion) > 0) {
-      return version;
+Future<String?> _nextLinterVersion(Version linterVersion) async {
+  var versions = await linterVersions;
+  if (versions != null) {
+    for (final version in versions) {
+      if (Version.parse(version).compareTo(linterVersion) > 0) {
+        return version;
+      }
     }
   }
   return null;
 }
 
-List<String> _linterVersions;
-Future<List<String>> get linterVersions async {
+List<String>? _linterVersions;
+Future<List<String>?> get linterVersions async {
   if (_linterVersions == null) {
     _linterVersions = <String>[];
     for (var minor = 0; minor <= await latestMinor; ++minor) {
-      _linterVersions.add('0.1.$minor');
+      _linterVersions!.add('0.1.$minor');
     }
   }
   return _linterVersions;
 }
 
 class SinceInfo {
-  final String sinceLinter;
-  final String sinceDartSdk;
+  final String? sinceLinter;
+  final String? sinceDartSdk;
   SinceInfo({this.sinceLinter, this.sinceDartSdk});
 
   @override

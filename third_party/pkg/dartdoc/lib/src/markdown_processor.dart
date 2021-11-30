@@ -11,7 +11,6 @@ import 'dart:math';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:dartdoc/src/element_type.dart';
 import 'package:dartdoc/src/model/model.dart';
-import 'package:dartdoc/src/tuple.dart';
 import 'package:dartdoc/src/warnings.dart';
 import 'package:markdown/markdown.dart' as md;
 
@@ -163,7 +162,7 @@ final RegExp operatorPrefix = RegExp(r'^operator[ ]*');
 
 final HtmlEscape htmlEscape = const HtmlEscape(HtmlEscapeMode.element);
 
-final List<md.InlineSyntax> _markdown_syntaxes = [
+final List<md.InlineSyntax> _markdownSyntaxes = [
   _InlineCodeSyntax(),
   _AutolinkWithoutScheme(),
   md.InlineHtmlSyntax(),
@@ -171,7 +170,7 @@ final List<md.InlineSyntax> _markdown_syntaxes = [
   md.AutolinkExtensionSyntax(),
 ];
 
-final List<md.BlockSyntax> _markdown_block_syntaxes = [
+final List<md.BlockSyntax> _markdownBlockSyntaxes = [
   const md.FencedCodeBlockSyntax(),
   const md.HeaderWithIdSyntax(),
   const md.SetextHeaderWithIdSyntax(),
@@ -179,7 +178,7 @@ final List<md.BlockSyntax> _markdown_block_syntaxes = [
 ];
 
 // Remove these schemas from the display text for hyperlinks.
-final RegExp _hide_schemes = RegExp('^(http|https)://');
+final RegExp _hideSchemes = RegExp('^(http|https)://');
 
 class MatchingLinkResult {
   final ModelElement element;
@@ -517,7 +516,7 @@ class _MarkdownCommentReference {
 
   void _reducePreferReferencesIncludingFullyQualifiedName() {
     var startName = '${element.fullyQualifiedName}.';
-    var realName = '${element.fullyQualifiedName}.${codeRefChomped}';
+    var realName = '${element.fullyQualifiedName}.$codeRefChomped';
     if (results.any((r) => r.fullyQualifiedName == realName)) {
       results.removeWhere((r) => r.fullyQualifiedName != realName);
     }
@@ -895,55 +894,51 @@ final RegExp allAfterLastNewline = RegExp(r'\n.*$', multiLine: true);
 // https://github.com/dart-lang/dartdoc/issues/1250#issuecomment-269257942
 void showWarningsForGenericsOutsideSquareBracketsBlocks(
     String text, Warnable element) {
-  var tagPositions = findFreeHangingGenericsPositions(text);
-  if (tagPositions.isNotEmpty) {
-    tagPositions.forEach((int position) {
-      var priorContext =
-          '${text.substring(max(position - maxPriorContext, 0), position)}';
-      var postContext =
-          '${text.substring(position, min(position + maxPostContext, text.length))}';
-      priorContext = priorContext.replaceAll(allBeforeFirstNewline, '');
-      postContext = postContext.replaceAll(allAfterLastNewline, '');
-      var errorMessage = '$priorContext$postContext';
-      // TODO(jcollins-g):  allow for more specific error location inside comments
-      element.warn(PackageWarning.typeAsHtml, message: errorMessage);
-    });
-  }
+  findFreeHangingGenericsPositions(text).forEach((int position) {
+    var priorContext =
+        '${text.substring(max(position - maxPriorContext, 0), position)}';
+    var postContext =
+        '${text.substring(position, min(position + maxPostContext, text.length))}';
+    priorContext = priorContext.replaceAll(allBeforeFirstNewline, '');
+    postContext = postContext.replaceAll(allAfterLastNewline, '');
+    var errorMessage = '$priorContext$postContext';
+    // TODO(jcollins-g):  allow for more specific error location inside comments
+    element.warn(PackageWarning.typeAsHtml, message: errorMessage);
+  });
 }
 
-List<int> findFreeHangingGenericsPositions(String string) {
+Iterable<int> findFreeHangingGenericsPositions(String string) sync* {
   var currentPosition = 0;
   var squareBracketsDepth = 0;
-  var results = <int>[];
   while (true) {
-    var nextOpenBracket = string.indexOf('[', currentPosition);
-    var nextCloseBracket = string.indexOf(']', currentPosition);
-    var nextNonHTMLTag = string.indexOf(nonHTML, currentPosition);
-    var nextPositions = [nextOpenBracket, nextCloseBracket, nextNonHTMLTag]
+    final nextOpenBracket = string.indexOf('[', currentPosition);
+    final nextCloseBracket = string.indexOf(']', currentPosition);
+    final nextNonHTMLTag = string.indexOf(nonHTML, currentPosition);
+    final nextPositions = [nextOpenBracket, nextCloseBracket, nextNonHTMLTag]
         .where((p) => p != -1);
-    if (nextPositions.isNotEmpty) {
-      final minPos = nextPositions.reduce(min);
-      if (nextOpenBracket == minPos) {
-        squareBracketsDepth += 1;
-      } else if (nextCloseBracket == minPos) {
-        squareBracketsDepth = max(squareBracketsDepth - 1, 0);
-      } else if (nextNonHTMLTag == minPos) {
-        if (squareBracketsDepth == 0) {
-          results.add(minPos);
-        }
-      }
-      currentPosition = minPos + 1;
-    } else {
+
+    if (nextPositions.isEmpty) {
       break;
     }
+
+    currentPosition = nextPositions.reduce(min);
+    if (nextOpenBracket == currentPosition) {
+      squareBracketsDepth += 1;
+    } else if (nextCloseBracket == currentPosition) {
+      squareBracketsDepth = max(squareBracketsDepth - 1, 0);
+    } else if (nextNonHTMLTag == currentPosition) {
+      if (squareBracketsDepth == 0) {
+        yield currentPosition;
+      }
+    }
+    currentPosition++;
   }
-  return results;
 }
 
 class MarkdownDocument extends md.Document {
   factory MarkdownDocument.withElementLinkResolver(
       Canonicalization element, List<ModelCommentReference> commentRefs) {
-    md.Node linkResolver(String name, [String _]) {
+    md.Node /*?*/ linkResolver(String name, [String /*?*/ _]) {
       if (name.isEmpty) {
         return null;
       }
@@ -951,8 +946,8 @@ class MarkdownDocument extends md.Document {
     }
 
     return MarkdownDocument(
-        inlineSyntaxes: _markdown_syntaxes,
-        blockSyntaxes: _markdown_block_syntaxes,
+        inlineSyntaxes: _markdownSyntaxes,
+        blockSyntaxes: _markdownBlockSyntaxes,
         linkResolver: linkResolver);
   }
 
@@ -969,8 +964,10 @@ class MarkdownDocument extends md.Document {
             linkResolver: linkResolver,
             imageLinkResolver: imageLinkResolver);
 
-  /// Returns a tuple of List<md.Node> and hasExtendedContent
-  Tuple2<List<md.Node>, bool> parseMarkdownText(
+  /// Parses markdown text, collecting the first [md.Node] or all of them
+  /// if [processFullText] is `true`. If more than one node is present,
+  /// then [DocumentationParseResult.hasExtendedDocs] will be set to `true`.
+  DocumentationParseResult parseMarkdownText(
       String text, bool processFullText) {
     var hasExtendedContent = false;
     var lines = LineSplitter.split(text).toList();
@@ -985,7 +982,7 @@ class MarkdownDocument extends md.Document {
       nodes.add(node);
     }
     _parseInlineContent(nodes);
-    return Tuple2(nodes, hasExtendedContent);
+    return DocumentationParseResult(nodes, hasExtendedContent);
   }
 
   // From package:markdown/src/document.dart
@@ -1005,12 +1002,21 @@ class MarkdownDocument extends md.Document {
   }
 }
 
+class DocumentationParseResult {
+  static const empty = DocumentationParseResult([], false);
+
+  final List<md.Node> nodes;
+  final bool hasExtendedDocs;
+
+  const DocumentationParseResult(this.nodes, this.hasExtendedDocs);
+}
+
 class _InlineCodeSyntax extends md.InlineSyntax {
   _InlineCodeSyntax() : super(r'\[:\s?((?:.|\n)*?)\s?:\]');
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
-    var element = md.Element.text('code', htmlEscape.convert(match[1]));
+    var element = md.Element.text('code', htmlEscape.convert(match[1] /*!*/));
     parser.addNode(element);
     return true;
   }
@@ -1019,8 +1025,8 @@ class _InlineCodeSyntax extends md.InlineSyntax {
 class _AutolinkWithoutScheme extends md.AutolinkSyntax {
   @override
   bool onMatch(md.InlineParser parser, Match match) {
-    var url = match[1];
-    var text = htmlEscape.convert(url).replaceFirst(_hide_schemes, '');
+    var url = match[1] /*!*/;
+    var text = htmlEscape.convert(url).replaceFirst(_hideSchemes, '');
     var anchor = md.Element.text('a', text);
     anchor.attributes['href'] = url;
     parser.addNode(anchor);

@@ -9,10 +9,10 @@ import 'dart:io' show Platform;
 
 import 'package:analyzer/file_system/file_system.dart';
 import 'package:dartdoc/dartdoc.dart';
+import 'package:dartdoc/options.dart';
 import 'package:dartdoc/src/io_utils.dart';
 import 'package:dartdoc/src/logging.dart';
 import 'package:dartdoc/src/model/model.dart';
-import 'package:dartdoc/src/tuple.dart';
 import 'package:dartdoc/src/warnings.dart';
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
@@ -117,7 +117,7 @@ void main() {
         expect(favicon.readAsStringSync(),
             contains('Not really a png, but a test file'));
         var indexString = index.readAsStringSync();
-        expect(indexString, contains('Footer things'));
+        expect(indexString, contains('<em>Footer</em> things'));
         expect(indexString, contains('footer.txt data'));
         expect(indexString, contains('HTML header file'));
       });
@@ -147,10 +147,8 @@ void main() {
       var results = await dartdoc.generateDocsBase();
       var p = results.packageGraph;
       var unresolvedToolErrors = p.packageWarningCounter.countedWarnings.values
-          .expand<String>((Set<Tuple2<PackageWarning, String>> s) => s
-              .where((Tuple2<PackageWarning, String> t) =>
-                  t.item1 == PackageWarning.toolError)
-              .map<String>((Tuple2<PackageWarning, String> t) => t.item2));
+          .map((e) => e[PackageWarning.toolError] ?? {})
+          .expand((element) => element);
 
       expect(p.packageWarningCounter.errorCount, equals(1));
       expect(unresolvedToolErrors.length, equals(1));
@@ -165,10 +163,8 @@ void main() {
       var p = results.packageGraph;
       var unresolvedExportWarnings = p
           .packageWarningCounter.countedWarnings.values
-          .expand<String>((Set<Tuple2<PackageWarning, String>> s) => s
-              .where((Tuple2<PackageWarning, String> t) =>
-                  t.item1 == PackageWarning.unresolvedExport)
-              .map<String>((Tuple2<PackageWarning, String> t) => t.item2));
+          .map((e) => e[PackageWarning.unresolvedExport] ?? {})
+          .expand((element) => element);
 
       expect(unresolvedExportWarnings.length, equals(1));
       expect(unresolvedExportWarnings.first,
@@ -248,7 +244,9 @@ void main() {
         var packageGraph = results.packageGraph;
         var p = packageGraph.defaultPackage;
         expect(p.name, 'test_package');
+        // ignore: deprecated_member_use_from_same_package
         expect(p.hasDocumentationFile, isTrue);
+        expect(p.documentationFile, isNotNull);
         // Total number of public libraries in test_package.
         // +2 since we are not manually excluding anything.
         expect(packageGraph.defaultPackage.publicLibraries,
@@ -293,7 +291,9 @@ void main() {
 
       var p = results.packageGraph;
       expect(p.defaultPackage.name, 'sky_engine');
+      // ignore: deprecated_member_use_from_same_package
       expect(p.defaultPackage.hasDocumentationFile, isFalse);
+      expect(p.defaultPackage.documentationFile, isNull);
       expect(p.libraries, hasLength(3));
       expect(p.libraries.map((lib) => lib.name).contains('dart:core'), isTrue);
       expect(p.libraries.map((lib) => lib.name).contains('dart:async'), isTrue);

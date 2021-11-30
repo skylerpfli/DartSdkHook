@@ -23,7 +23,7 @@ https://dart.dev/guides/language/effective-dart/design#avoid-defining-custom-equ
 for more information.
 
 **GOOD:**
-```
+```dart
 @immutable
 class A {
   final String key;
@@ -36,7 +36,7 @@ class A {
 ```
 
 **BAD:**
-```
+```dart
 class B {
   String key;
   const B(this.key);
@@ -51,7 +51,7 @@ NOTE: The lint checks the use of the @immutable annotation, and will trigger
 even if the class is otherwise not mutable. Thus:
 
 **BAD:**
-```
+```dart
 class C {
   final String key;
   const C(this.key);
@@ -70,10 +70,10 @@ String _immutableVarName = 'immutable';
 /// The name of `meta` library, used to define analysis annotations.
 String _metaLibName = 'meta';
 
-bool _isImmutable(Element element) =>
+bool _isImmutable(Element? element) =>
     element is PropertyAccessorElement &&
     element.name == _immutableVarName &&
-    element.library?.name == _metaLibName;
+    element.library.name == _metaLibName;
 
 class AvoidOperatorEqualsOnMutableClasses extends LintRule
     implements NodeLintRule {
@@ -101,7 +101,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
-    if (node.name.token?.type == TokenType.EQ_EQ || isHashCode(node)) {
+    if (node.name.token.type == TokenType.EQ_EQ || isHashCode(node)) {
       final classElement = _getClassForMethod(node);
       if (classElement != null && !_hasImmutableAnnotation(classElement)) {
         rule.reportLintForToken(node.firstTokenAfterCommentAndMetadata);
@@ -109,8 +109,9 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
   }
 
-  ClassElement _getClassForMethod(MethodDeclaration node) =>
-      node.parent.thisOrAncestorOfType<ClassDeclaration>()?.declaredElement;
+  ClassElement? _getClassForMethod(MethodDeclaration node) =>
+      // todo (pq): should this be ClassOrMixinDeclaration ?
+      node.thisOrAncestorOfType<ClassDeclaration>()?.declaredElement;
 
   bool _hasImmutableAnnotation(ClassElement clazz) {
     final inheritedAndSelfElements = <ClassElement>[

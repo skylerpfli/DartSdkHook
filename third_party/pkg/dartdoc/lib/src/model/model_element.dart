@@ -5,18 +5,19 @@
 /// The models used to represent Dart code.
 library dartdoc.models;
 
-import 'dart:collection' show UnmodifiableListView;
 import 'dart:convert';
 
 import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/type.dart' show FunctionType;
 import 'package:analyzer/source/line_info.dart';
 import 'package:analyzer/src/dart/element/element.dart';
 import 'package:analyzer/src/dart/element/member.dart'
-    show ExecutableMember, Member, ParameterMember;
+    show ExecutableMember, Member;
 import 'package:collection/collection.dart';
 import 'package:dartdoc/src/dartdoc_options.dart';
-import 'package:dartdoc/src/element_type.dart';
+import 'package:dartdoc/src/model/annotation.dart';
 import 'package:dartdoc/src/model/documentation_comment.dart';
+import 'package:dartdoc/src/model/feature.dart';
 import 'package:dartdoc/src/model/feature_set.dart';
 import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/model_utils.dart' as utils;
@@ -24,43 +25,11 @@ import 'package:dartdoc/src/render/model_element_renderer.dart';
 import 'package:dartdoc/src/render/parameter_renderer.dart';
 import 'package:dartdoc/src/render/source_code_renderer.dart';
 import 'package:dartdoc/src/source_linker.dart';
+import 'package:dartdoc/src/special_elements.dart';
 import 'package:dartdoc/src/tuple.dart';
 import 'package:dartdoc/src/warnings.dart';
 import 'package:meta/meta.dart';
-import 'package:path/path.dart' as path;
-
-/// Items mapped less than zero will sort before custom annotations.
-/// Items mapped above zero are sorted after custom annotations.
-/// Items mapped to zero will sort alphabetically among custom annotations.
-/// Custom annotations are assumed to be any annotation or feature not in this
-/// map.
-const Map<String, int> featureOrder = {
-  'read-only': 1,
-  'write-only': 1,
-  'read / write': 1,
-  'covariant': 2,
-  'final': 2,
-  'late': 2,
-  'inherited': 3,
-  'inherited-getter': 3,
-  'inherited-setter': 3,
-  'override': 3,
-  'override-getter': 3,
-  'override-setter': 3,
-  'extended': 3,
-};
-
-int byFeatureOrdering(String a, String b) {
-  var scoreA = 0;
-  var scoreB = 0;
-
-  if (featureOrder.containsKey(a)) scoreA = featureOrder[a];
-  if (featureOrder.containsKey(b)) scoreB = featureOrder[b];
-
-  if (scoreA < scoreB) return -1;
-  if (scoreA > scoreB) return 1;
-  return compareAsciiLowerCaseNatural(a, b);
-}
+import 'package:path/path.dart' as path show Context;
 
 /// This doc may need to be processed in case it has a template or html
 /// fragment.
@@ -140,19 +109,16 @@ abstract class ModelElement extends Canonicalization
   final Element _element;
 
   // TODO(jcollins-g): This really wants a "member that has a type" class.
-  final Member _originalMember;
-  final Library _library;
+  final Member /*?*/ _originalMember;
+  final Library /*?*/ _library;
 
-  ElementType _modelType;
   String _rawDocs;
   Documentation __documentation;
   UnmodifiableListView<Parameter> _parameters;
   String _linkedName;
 
-  // TODO(jcollins-g): make _originalMember optional after dart-lang/sdk#15101
-  // is fixed.
-  ModelElement(
-      this._element, this._library, this._packageGraph, this._originalMember);
+  ModelElement(this._element, this._library, this._packageGraph,
+      [this._originalMember]);
 
   /// Creates a [ModelElement] from [e].
   factory ModelElement.fromElement(Element e, PackageGraph p) {
@@ -332,11 +298,14 @@ abstract class ModelElement extends Canonicalization
     if (e is FunctionElement) {
       return ModelFunction(e, library, packageGraph);
     } else if (e is GenericFunctionTypeElement) {
-      assert(e.enclosingElement is FunctionTypeAliasElement);
+      assert(e.enclosingElement is TypeAliasElement);
       assert(e.enclosingElement.name != '');
       return ModelFunctionTypedef(e, library, packageGraph);
     }
-    if (e is FunctionTypeAliasElement) {
+    if (e is TypeAliasElement) {
+      if (e.aliasedType is FunctionType) {
+        return FunctionTypedef(e, library, packageGraph);
+      }
       return Typedef(e, library, packageGraph);
     }
     if (e is ConstructorElement) {
@@ -372,7 +341,7 @@ abstract class ModelElement extends Canonicalization
               originalMember: originalMember);
         }
       } else {
-        return Accessor(e, library, packageGraph, null);
+        return Accessor(e, library, packageGraph);
       }
     }
     if (e is TypeParameterElement) {
@@ -402,66 +371,17 @@ abstract class ModelElement extends Canonicalization
   ModelNode get modelNode =>
       _modelNode ??= packageGraph.getModelNodeFor(element);
 
-  List<String> get annotations => annotationsFromMetadata(element.metadata);
-
-  /// Returns linked annotations from a given metadata set, with escaping.
-  // TODO(srawlins): Attempt to revive constructor arguments in an annotation,
-  // akin to source_gen's Reviver, in order to link to inner components. For
-  // example, in `@Foo(const Bar(), baz: <Baz>[Baz.one, Baz.two])`, link to
-  // `Foo`, `Bar`, `Baz`, `Baz.one`, and `Baz.two`.
-  List<String> annotationsFromMetadata(Iterable<ElementAnnotation> md) {
-    var annotationStrings = <String>[];
-    if (md == null) return annotationStrings;
-    for (var a in md) {
-      var annotation = (const HtmlEscape()).convert(a.toSource());
-      var annotationElement = a.element;
-
-      if (annotationElement is ConstructorElement) {
-        // TODO(srawlins): I think we should actually link to the constructor,
-        // which may have details about parameters. For example, given the
-        // annotation `@Immutable('text')`, the constructor documents what the
-        // parameter is, and the class only references `immutable`. It's a
-        // lose-lose cycle of mis-direction.
-        annotationElement =
-            (annotationElement as ConstructorElement).returnType.element;
-      } else if (annotationElement is PropertyAccessorElement) {
-        annotationElement =
-            (annotationElement as PropertyAccessorElement).variable;
-      }
-      if (annotationElement is Member) {
-        annotationElement = (annotationElement as Member).declaration;
-      }
-
-      // Some annotations are intended to be invisible (such as `@pragma`).
-      if (!_shouldDisplayAnnotation(annotationElement)) continue;
-
-      var annotationModelElement =
-          packageGraph.findCanonicalModelElementFor(annotationElement);
-      if (annotationModelElement != null) {
-        annotation = annotation.replaceFirst(
-            annotationModelElement.name, annotationModelElement.linkedName);
-      }
-      annotationStrings.add(annotation);
-    }
-    return annotationStrings;
-  }
-
-  bool _shouldDisplayAnnotation(Element annotationElement) {
-    if (annotationElement is ClassElement) {
-      var annotationClass =
-          packageGraph.findCanonicalModelElementFor(annotationElement) as Class;
-      if (annotationClass == null && annotationElement != null) {
-        annotationClass =
-            ModelElement.fromElement(annotationElement, packageGraph) as Class;
-      }
-
-      return annotationClass == null ||
-          packageGraph.isAnnotationVisible(annotationClass);
-    }
-    // We cannot resolve it, which does not prevent it from being displayed.
-    return true;
-  }
-
+  Iterable<Annotation> _annotations;
+  // Skips over annotations with null elements or that are otherwise
+  // supposed to be invisible (@pragma).  While technically, null elements
+  // indicate invalid code from analyzer's perspective they are present in
+  // sky_engine (@Native) so we don't want to crash here.
+  Iterable<Annotation> get annotations => _annotations ??= element.metadata
+      .whereNot((m) =>
+          m.element == null ||
+          packageGraph.specialClasses[SpecialClass.pragma].element.constructors
+              .contains(m.element))
+      .map((m) => Annotation(m, library, packageGraph));
   bool _isPublic;
 
   @override
@@ -530,26 +450,29 @@ abstract class ModelElement extends Canonicalization
     'deprecated'
   };
 
-  Set<String> get features {
+  bool get hasFeatures => features.isNotEmpty;
+
+  /// Usually a superset of [annotations] except where [_specialFeatures]
+  /// replace them, a list of annotations as well as tags applied by
+  /// Dartdoc itself when it notices characteristics of an element
+  /// that need to be documented.  See [Feature] for a list.
+  Set<Feature> get features {
     return {
-      ...annotationsFromMetadata(element.metadata
-          .where((e) => !_specialFeatures.contains(e.element?.name))),
+      ...annotations.where((a) => !_specialFeatures.contains(a.name)),
       // 'const' and 'static' are not needed here because 'const' and 'static'
       // elements get their own sections in the doc.
-      if (isFinal) 'final',
-      if (isLate) 'late',
+      if (isFinal) Feature.finalFeature,
+      if (isLate) Feature.lateFeature,
     };
   }
 
-  String get featuresAsString {
-    var allFeatures = features.toList()..sort(byFeatureOrdering);
-    return allFeatures.join(', ');
-  }
+  String get featuresAsString => modelElementRenderer.renderFeatures(this);
 
-  bool get canHaveParameters =>
-      element is ExecutableElement ||
+  // True if this is a function, or if it is an type alias to a function.
+  bool get isCallable =>
       element is FunctionTypedElement ||
-      element is FunctionTypeAliasElement;
+      (element is TypeAliasElement &&
+          (element as TypeAliasElement).aliasedElement is FunctionTypedElement);
 
   ModelElement buildCanonicalModelElement() {
     Container preferredClass;
@@ -808,11 +731,13 @@ abstract class ModelElement extends Canonicalization
 
   @override
   String get location {
-    // Call nothing from here that can emit warnings or you'll cause stack overflows.
+    // Call nothing from here that can emit warnings or you'll cause stack
+    // overflows.
+    var sourceUri = pathContext.toUri(sourceFileName);
     if (characterLocation != null) {
-      return '(${path.toUri(sourceFileName)}:${characterLocation.toString()})';
+      return '($sourceUri:${characterLocation.toString()})';
     }
-    return '(${path.toUri(sourceFileName)})';
+    return '($sourceUri)';
   }
 
   /// Returns a link to extended documentation, or the empty string if that
@@ -877,8 +802,7 @@ abstract class ModelElement extends Canonicalization
   bool get hasAnnotations => annotations.isNotEmpty;
 
   @override
-  bool get hasDocumentation =>
-      documentation != null && documentation.isNotEmpty;
+  bool get hasDocumentation => documentation?.isNotEmpty == true;
 
   @override
   bool get hasExtendedDocumentation =>
@@ -981,45 +905,6 @@ abstract class ModelElement extends Canonicalization
   String get linkedParamsNoMetadataOrNames => _parameterRenderer
       .renderLinkedParams(parameters, showMetadata: false, showNames: false);
 
-  ElementType get modelType {
-    var element = this.element;
-    if (_modelType == null) {
-      // TODO(jcollins-g): Need an interface for a "member with a type" (or changed object model).
-      if (_originalMember != null &&
-          (_originalMember is ExecutableMember ||
-              _originalMember is ParameterMember)) {
-        if (_originalMember is ExecutableMember) {
-          _modelType = ElementType.from(
-              (_originalMember as ExecutableMember).type,
-              library,
-              packageGraph);
-        } else {
-          // ParameterMember
-          _modelType = ElementType.from(
-              (_originalMember as ParameterMember).type, library, packageGraph);
-        }
-      } else if (element is ClassElement) {
-        _modelType = ElementType.from(element.thisType, library, packageGraph);
-      } else if (element is FunctionTypeAliasElement) {
-        _modelType =
-            ElementType.from(element.function.type, library, packageGraph);
-      } else if (element is FunctionTypedElement) {
-        _modelType = ElementType.from(element.type, library, packageGraph);
-      } else if (element is ParameterElement) {
-        _modelType = ElementType.from(element.type, library, packageGraph);
-      } else if (element is PropertyInducingElement) {
-        _modelType = ElementType.from(element.type, library, packageGraph);
-      } else {
-        throw UnimplementedError('(${element.runtimeType}) $element');
-      }
-    }
-    return _modelType;
-  }
-
-  void setModelType(ElementType type) {
-    _modelType = type;
-  }
-
   String _name;
 
   @override
@@ -1052,7 +937,7 @@ abstract class ModelElement extends Canonicalization
           (this as GetterSetterCombo).setter != null) {
         newParameters.addAll((this as GetterSetterCombo).setter.parameters);
       } else {
-        if (canHaveParameters) newParameters.addAll(parameters);
+        if (isCallable) newParameters.addAll(parameters);
       }
       while (newParameters.isNotEmpty) {
         recursedParameters.addAll(newParameters);
@@ -1072,35 +957,38 @@ abstract class ModelElement extends Canonicalization
   path.Context get pathContext => packageGraph.resourceProvider.pathContext;
 
   List<Parameter> get parameters {
-    if (!canHaveParameters) {
+    if (!isCallable) {
       throw StateError('$element cannot have parameters');
     }
 
     if (_parameters == null) {
       List<ParameterElement> params;
 
-      if (element is ExecutableElement) {
-        if (_originalMember != null) {
-          assert(_originalMember is ExecutableMember);
-          params = (_originalMember as ExecutableMember).parameters;
-        } else {
-          params = (element as ExecutableElement).parameters;
+      if (element is TypeAliasElement) {
+        _parameters = ModelElement.fromElement(
+                (element as TypeAliasElement).aliasedElement, packageGraph)
+            .parameters;
+      } else {
+        if (element is ExecutableElement) {
+          if (_originalMember != null) {
+            assert(_originalMember is ExecutableMember);
+            params = (_originalMember as ExecutableMember).parameters;
+          } else {
+            params = (element as ExecutableElement).parameters;
+          }
         }
-      }
-      if (params == null && element is FunctionTypedElement) {
-        if (_originalMember != null) {
-          params = (_originalMember as dynamic).parameters;
-        } else {
-          params = (element as FunctionTypedElement).parameters;
+        if (params == null && element is FunctionTypedElement) {
+          if (_originalMember != null) {
+            params = (_originalMember as FunctionTypedElement).parameters;
+          } else {
+            params = (element as FunctionTypedElement).parameters;
+          }
         }
+        _parameters = UnmodifiableListView(params
+            .map(
+                (p) => ModelElement.from(p, library, packageGraph) as Parameter)
+            .toList(growable: false));
       }
-      if (params == null && element is FunctionTypeAliasElement) {
-        params = (element as FunctionTypeAliasElement).function.parameters;
-      }
-
-      _parameters = UnmodifiableListView<Parameter>(params
-          .map((p) => ModelElement.from(p, library, packageGraph) as Parameter)
-          .toList());
     }
     return _parameters;
   }

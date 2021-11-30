@@ -1,9 +1,6 @@
 // Copyright (c) 2014, the Dart project authors.  Please see the AUTHORS file
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
-
-library dart_style.src.source_visitor;
-
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/standard_ast_factory.dart';
 import 'package:analyzer/dart/ast/token.dart';
@@ -52,14 +49,13 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// splitting up named constructors.
   static bool looksLikeStaticCall(Expression node) {
     if (node is! MethodInvocation) return false;
-    var invocation = node as MethodInvocation;
-    if (invocation.target == null) return false;
+    if (node.target == null) return false;
 
     // A prefixed unnamed constructor call:
     //
     //     prefix.Foo();
-    if (invocation.target is SimpleIdentifier &&
-        _looksLikeClassName(invocation.methodName.name)) {
+    if (node.target is SimpleIdentifier &&
+        _looksLikeClassName(node.methodName.name)) {
       return true;
     }
 
@@ -67,10 +63,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     //
     //     Foo.named();
     //     prefix.Foo.named();
-    var target = invocation.target;
-    if (target is PrefixedIdentifier) {
-      target = (target as PrefixedIdentifier).identifier;
-    }
+    var target = node.target;
+    if (target is PrefixedIdentifier) target = target.identifier;
 
     return target is SimpleIdentifier && _looksLikeClassName(target.name);
   }
@@ -142,7 +136,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// The character offset of the end of the selection, if there is a selection.
   ///
   /// This is calculated and cached by [_findSelectionEnd].
-  int _selectionEnd;
+  int? _selectionEnd;
 
   /// How many levels deep inside a constant context the visitor currently is.
   int _constNesting = 0;
@@ -200,9 +194,8 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   /// Initialize a newly created visitor to write source code representing
   /// the visited nodes to the given [writer].
-  SourceVisitor(this._formatter, this._lineInfo, this._source) {
-    builder = ChunkBuilder(_formatter, _source);
-  }
+  SourceVisitor(this._formatter, this._lineInfo, this._source)
+      : builder = ChunkBuilder(_formatter, _source);
 
   /// Runs the visitor on [node], formatting its contents.
   ///
@@ -215,7 +208,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node);
 
     // Output trailing comments.
-    writePrecedingCommentsAndNewlines(node.endToken.next);
+    writePrecedingCommentsAndNewlines(node.endToken.next!);
 
     assert(_constNesting == 0, 'Should have exited all const contexts.');
 
@@ -297,13 +290,20 @@ class SourceVisitor extends ThrowingAstVisitor {
   void visitAnnotation(Annotation node) {
     token(node.atSign);
     visit(node.name);
+
+    builder.nestExpression();
+    visit(node.typeArguments);
     token(node.period);
     visit(node.constructorName);
 
-    // Metadata annotations are always const contexts.
-    _constNesting++;
-    visit(node.arguments);
-    _constNesting--;
+    if (node.arguments != null) {
+      // Metadata annotations are always const contexts.
+      _constNesting++;
+      visitArgumentList(node.arguments!, nestExpression: false);
+      _constNesting--;
+    }
+
+    builder.unnest();
   }
 
   /// Visits an argument list.
@@ -362,7 +362,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     token(node.assertKeyword);
 
     var arguments = <Expression>[node.condition];
-    if (node.message != null) arguments.add(node.message);
+    if (node.message != null) arguments.add(node.message!);
 
     // If the argument list has a trailing comma, format it like a collection
     // literal where each argument goes on its own line, they are indented +2,
@@ -386,7 +386,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       token(node.assertKeyword);
 
       var arguments = [node.condition];
-      if (node.message != null) arguments.add(node.message);
+      if (node.message != null) arguments.add(node.message!);
 
       // If the argument list has a trailing comma, format it like a collection
       // literal where each argument goes on its own line, they are indented +2,
@@ -641,7 +641,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // If the target is a call with a trailing comma in the argument list,
     // treat it like a collection literal.
-    ArgumentList arguments;
+    ArgumentList? arguments;
     if (expression is InvocationExpression) {
       arguments = expression.argumentList;
     } else if (expression is InstanceCreationExpression) {
@@ -821,6 +821,13 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   @override
   void visitConditionalExpression(ConditionalExpression node) {
+    // TODO(rnystrom): Consider revisiting whether users prefer this after 2.13.
+    /*
+    // Flatten else-if style chained conditionals.
+    var shouldNest = node.parent is! ConditionalExpression ||
+        (node.parent as ConditionalExpression).elseExpression != node;
+    if (shouldNest) builder.nestExpression();
+    */
     builder.nestExpression();
 
     // Start lazily so we don't force the operator to split if a line comment
@@ -856,6 +863,11 @@ class SourceVisitor extends ThrowingAstVisitor {
     builder.endRule();
     builder.endSpan();
     builder.endBlockArgumentNesting();
+
+    // TODO(rnystrom): Consider revisiting whether users prefer this after 2.13.
+    /*
+    if (shouldNest) builder.unnest();
+    */
     builder.unnest();
   }
 
@@ -937,8 +949,12 @@ class SourceVisitor extends ThrowingAstVisitor {
       //           super();
       space();
       if (node.initializers.length > 1) {
-        _writeText(node.parameters.parameters.last.isOptional ? ' ' : '  ',
-            node.separator.offset);
+        var padding = '  ';
+        if (node.parameters.parameters.last.isNamed ||
+            node.parameters.parameters.last.isOptionalPositional) {
+          padding = ' ';
+        }
+        _writeText(padding, node.separator!.offset);
       }
 
       // ":".
@@ -1037,15 +1053,15 @@ class SourceVisitor extends ThrowingAstVisitor {
       if (_formatter.fixes.contains(StyleFix.namedDefaultSeparator)) {
         // Change the separator to "=".
         space();
-        writePrecedingCommentsAndNewlines(node.separator);
-        _writeText('=', node.separator.offset);
+        writePrecedingCommentsAndNewlines(node.separator!);
+        _writeText('=', node.separator!.offset);
       } else {
         // The '=' separator is preceded by a space, ":" is not.
-        if (node.separator.type == TokenType.EQ) space();
+        if (node.separator!.type == TokenType.EQ) space();
         token(node.separator);
       }
 
-      soloSplit(_assignmentCost(node.defaultValue));
+      soloSplit(_assignmentCost(node.defaultValue!));
       visit(node.defaultValue);
 
       builder.unnest();
@@ -1197,7 +1213,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (expression is PropertyAccess) {
       return expression.realTarget;
     } else if (expression is MethodInvocation) {
-      return expression.realTarget;
+      return expression.realTarget!;
     } else if (expression is IndexExpression) {
       return expression.realTarget;
     }
@@ -1227,7 +1243,7 @@ class SourceVisitor extends ThrowingAstVisitor {
           _insertCascadeTargetIntoExpression(expressionTarget, cascadeTarget),
           // If we've reached the end, replace the `..` operator with `.`
           expressionTarget == cascadeTarget
-              ? _synthesizeToken(TokenType.PERIOD, expression.operator)
+              ? _synthesizeToken(TokenType.PERIOD, expression.operator!)
               : expression.operator,
           expression.methodName,
           expression.typeArguments,
@@ -1237,9 +1253,8 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       // A null-aware cascade treats the `?` in `?..` as part of the token, but
       // for a non-cascade index, it is a separate `?` token.
-      if (expression.period != null &&
-          expression.period.type == TokenType.QUESTION_PERIOD_PERIOD) {
-        question = _synthesizeToken(TokenType.QUESTION, expression.period);
+      if (expression.period?.type == TokenType.QUESTION_PERIOD_PERIOD) {
+        question = _synthesizeToken(TokenType.QUESTION, expression.period!);
       }
 
       return astFactory.indexExpressionForTarget2(
@@ -1257,7 +1272,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Parenthesize the target of the given statement's expression (assumed to
   /// be a CascadeExpression) before removing the cascade.
   void _fixCascadeByParenthesizingTarget(ExpressionStatement statement) {
-    CascadeExpression cascade = statement.expression;
+    var cascade = statement.expression as CascadeExpression;
     assert(cascade.cascadeSections.length == 1);
 
     // Write any leading comments and whitespace immediately, as they should
@@ -1820,7 +1835,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       space();
 
-      visit(node.functionType);
+      visit(node.type);
     });
   }
 
@@ -1834,10 +1849,10 @@ class SourceVisitor extends ThrowingAstVisitor {
     // Treat a chain of if-else elements as a single unit so that we don't
     // unnecessarily indent each subsequent section of the chain.
     var ifElements = [
-      for (CollectionElement thisNode = node;
+      for (CollectionElement? thisNode = node;
           thisNode is IfElement;
-          thisNode = (thisNode as IfElement).elseElement)
-        thisNode as IfElement
+          thisNode = thisNode.elseElement)
+        thisNode
     ];
 
     // If the body of the then or else branch is a spread of a collection
@@ -1877,7 +1892,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     var elseSpreadBracket =
         _findSpreadCollectionBracket(ifElements.last.elseElement);
     if (elseSpreadBracket != null) {
-      spreadBrackets[ifElements.last.elseElement] = elseSpreadBracket;
+      spreadBrackets[ifElements.last.elseElement!] = elseSpreadBracket;
       beforeBlock(elseSpreadBracket, spreadRule, null);
     }
 
@@ -2005,7 +2020,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       }
 
       token(node.elseKeyword);
-      visitClause(node.elseStatement);
+      visitClause(node.elseStatement!);
     }
   }
 
@@ -2082,10 +2097,10 @@ class SourceVisitor extends ThrowingAstVisitor {
     var includeKeyword = true;
 
     if (node.keyword != null) {
-      if (node.keyword.keyword == Keyword.NEW &&
+      if (node.keyword!.keyword == Keyword.NEW &&
           _formatter.fixes.contains(StyleFix.optionalNew)) {
         includeKeyword = false;
-      } else if (node.keyword.keyword == Keyword.CONST &&
+      } else if (node.keyword!.keyword == Keyword.CONST &&
           _formatter.fixes.contains(StyleFix.optionalConst) &&
           _constNesting > 0) {
         includeKeyword = false;
@@ -2096,7 +2111,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       token(node.keyword, after: space);
     } else {
       // Don't lose comments before the discarded keyword, if any.
-      writePrecedingCommentsAndNewlines(node.keyword);
+      writePrecedingCommentsAndNewlines(node.keyword!);
     }
 
     builder.startSpan(Cost.constructorName);
@@ -2275,21 +2290,20 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // If there is only a single superclass constraint, format it like an
     // "extends" in a class.
-    if (node.onClause != null &&
-        node.onClause.superclassConstraints.length == 1) {
+    var onClause = node.onClause;
+    if (onClause != null && onClause.superclassConstraints.length == 1) {
       soloSplit();
-      token(node.onClause.onKeyword);
+      token(onClause.onKeyword);
       space();
-      visit(node.onClause.superclassConstraints.single);
+      visit(onClause.superclassConstraints.single);
     }
 
     builder.startRule(CombinatorRule());
 
     // If there are multiple superclass constraints, format them like the
     // "implements" clause.
-    if (node.onClause != null &&
-        node.onClause.superclassConstraints.length > 1) {
-      visit(node.onClause);
+    if (onClause != null && onClause.superclassConstraints.length > 1) {
+      visit(onClause);
     }
 
     visit(node.implementsClause);
@@ -2464,11 +2478,11 @@ class SourceVisitor extends ThrowingAstVisitor {
         // Parameters can use "var" instead of "dynamic". Since we are inserting
         // "dynamic" in that case, remove the "var".
         if (node.keyword != null) {
-          if (node.keyword.type != Keyword.VAR) {
+          if (node.keyword!.type != Keyword.VAR) {
             modifier(node.keyword);
           } else {
             // Keep any comment attached to "var".
-            writePrecedingCommentsAndNewlines(node.keyword);
+            writePrecedingCommentsAndNewlines(node.keyword!);
           }
         }
 
@@ -2477,8 +2491,8 @@ class SourceVisitor extends ThrowingAstVisitor {
         // without a name. Add "dynamic" in that case.
 
         // Ensure comments on the identifier comes before the inserted type.
-        token(node.identifier.token, before: () {
-          _writeText('dynamic', node.identifier.offset);
+        token(node.identifier!.token, before: () {
+          _writeText('dynamic', node.identifier!.offset);
           split();
         });
       } else {
@@ -2592,7 +2606,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     var components = node.components;
     for (var component in components) {
       // The '.' separator
-      if (component.previous.lexeme == '.') {
+      if (component.previous!.lexeme == '.') {
         token(component.previous);
       }
       token(component);
@@ -2683,7 +2697,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     var hasMultipleVariables =
         (node.parent as VariableDeclarationList).variables.length > 1;
 
-    _visitAssignment(node.equals, node.initializer, nest: hasMultipleVariables);
+    _visitAssignment(node.equals!, node.initializer!,
+        nest: hasMultipleVariables);
   }
 
   @override
@@ -2757,7 +2772,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   /// Visit a [node], and if not null, optionally preceded or followed by the
   /// specified functions.
-  void visit(AstNode node, {void Function() before, void Function() after}) {
+  void visit(AstNode? node, {void Function()? before, void Function()? after}) {
     if (node == null) return;
 
     if (before != null) before();
@@ -2794,7 +2809,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// the parameter.
   void visitParameterMetadata(
       NodeList<Annotation> metadata, void Function() visitParameter) {
-    if (metadata == null || metadata.isEmpty) {
+    if (metadata.isEmpty) {
       visitParameter();
       return;
     }
@@ -2828,7 +2843,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// the surrounding named argument rule. That way, this can ensure that a
   /// split between the name and argument forces the argument list to split
   /// too.
-  void visitNamedArgument(NamedExpression node, [NamedRule rule]) {
+  void visitNamedArgument(NamedExpression node, [NamedRule? rule]) {
     builder.nestExpression();
     builder.startSpan();
     visit(node.name);
@@ -2952,7 +2967,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     visit(node.name);
     builder.endSpan();
 
-    TypeParameterList typeParameters;
+    TypeParameterList? typeParameters;
     if (node is FunctionDeclaration) {
       typeParameters = node.functionExpression.typeParameters;
     } else {
@@ -2974,9 +2989,9 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// space before it if it's not empty.
   ///
   /// If [beforeBody] is provided, it is invoked before the body is visited.
-  void _visitBody(TypeParameterList typeParameters,
-      FormalParameterList parameters, FunctionBody body,
-      [void Function() beforeBody]) {
+  void _visitBody(TypeParameterList? typeParameters,
+      FormalParameterList? parameters, FunctionBody body,
+      [void Function()? beforeBody]) {
     // If the body is "=>", add an extra level of indentation around the
     // parameters and a rule that spans the parameters and the "=>". This
     // ensures that if the parameters wrap, they wrap more deeply than the "=>"
@@ -3018,7 +3033,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Visits the type parameters (if any) and formal parameters of a method
   /// declaration, function declaration, or generic function type.
   void _visitParameterSignature(
-      TypeParameterList typeParameters, FormalParameterList parameters) {
+      TypeParameterList? typeParameters, FormalParameterList? parameters) {
     // Start the nesting for the parameters here, so they indent past the
     // type parameters too, if any.
     builder.nestExpression();
@@ -3057,10 +3072,10 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Visit a list of [nodes] if not null, optionally separated and/or preceded
   /// and followed by the given functions.
   void visitNodes(Iterable<AstNode> nodes,
-      {void Function() before,
-      void Function() between,
-      void Function() after}) {
-    if (nodes == null || nodes.isEmpty) return;
+      {void Function()? before,
+      void Function()? between,
+      void Function()? after}) {
+    if (nodes.isEmpty) return;
 
     if (before != null) before();
 
@@ -3075,8 +3090,8 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   /// Visit a comma-separated list of [nodes] if not null.
   void visitCommaSeparatedNodes(Iterable<AstNode> nodes,
-      {void Function() between}) {
-    if (nodes == null || nodes.isEmpty) return;
+      {void Function()? between}) {
+    if (nodes.isEmpty) return;
 
     between ??= space;
 
@@ -3088,7 +3103,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       visit(node);
 
       // The comma after the node.
-      if (node.endToken.next.lexeme == ',') token(node.endToken.next);
+      if (node.endToken.next!.lexeme == ',') token(node.endToken.next);
     }
   }
 
@@ -3097,16 +3112,16 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///
   /// This is also used for argument lists with a trailing comma which are
   /// considered "collection-like". In that case, [node] is `null`.
-  void _visitCollectionLiteral(TypedLiteral node, Token leftBracket,
+  void _visitCollectionLiteral(TypedLiteral? node, Token leftBracket,
       Iterable<AstNode> elements, Token rightBracket,
-      [int cost]) {
+      [int? cost]) {
     if (node != null) {
       // See if `const` should be removed.
       if (node.constKeyword != null &&
           _constNesting > 0 &&
           _formatter.fixes.contains(StyleFix.optionalConst)) {
         // Don't lose comments before the discarded keyword, if any.
-        writePrecedingCommentsAndNewlines(node.constKeyword);
+        writePrecedingCommentsAndNewlines(node.constKeyword!);
       } else {
         modifier(node.constKeyword);
       }
@@ -3158,7 +3173,7 @@ class SourceVisitor extends ThrowingAstVisitor {
       if (element != elements.first) {
         if (preserveNewlines) {
           // See if the next element is on the next line.
-          if (_endLine(element.beginToken.previous) !=
+          if (_endLine(element.beginToken.previous!) !=
               _startLine(element.beginToken)) {
             oneOrTwoNewlines();
 
@@ -3212,7 +3227,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
     // Find the parameter immediately preceding the optional parameters (if
     // there are any).
-    FormalParameter lastRequired;
+    FormalParameter? lastRequired;
     for (var i = 0; i < parameters.parameters.length; i++) {
       if (parameters.parameters[i] is DefaultFormalParameter) {
         if (i > 0) lastRequired = parameters.parameters[i - 1];
@@ -3279,10 +3294,10 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// In that case [functionKeywordPosition] should be the source position
   /// used for the inserted "Function" text.
   void _visitGenericFunctionType(
-      AstNode returnType,
-      Token functionKeyword,
-      int functionKeywordPosition,
-      TypeParameterList typeParameters,
+      AstNode? returnType,
+      Token? functionKeyword,
+      int? functionKeywordPosition,
+      TypeParameterList? typeParameters,
       FormalParameterList parameters) {
     builder.startLazyRule();
     builder.nestExpression();
@@ -3291,7 +3306,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (functionKeyword != null) {
       token(functionKeyword);
     } else {
-      _writeText('Function', functionKeywordPosition);
+      _writeText('Function', functionKeywordPosition!);
     }
 
     builder.unnest();
@@ -3305,7 +3320,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// If [equals] is `null`, then [equalsPosition] must be a
   /// position to use for the inserted text "=".
   void _visitGenericTypeAliasHeader(Token typedefKeyword, AstNode name,
-      AstNode typeParameters, Token equals, int equalsPosition) {
+      AstNode? typeParameters, Token? equals, int? equalsPosition) {
     token(typedefKeyword);
     space();
 
@@ -3322,7 +3337,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     if (equals != null) {
       token(equals);
     } else {
-      _writeText('=', equalsPosition);
+      _writeText('=', equalsPosition!);
     }
 
     builder.endRule();
@@ -3355,7 +3370,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///     //   ^
   ///
   /// Otherwise, returns `null`.
-  Token _findSpreadCollectionBracket(AstNode node) {
+  Token? _findSpreadCollectionBracket(AstNode? node) {
     if (node is SpreadElement) {
       var expression = node.expression;
       if (expression is ListLiteral) {
@@ -3438,15 +3453,8 @@ class SourceVisitor extends ThrowingAstVisitor {
     // See if this literal is associated with an argument list or if element
     // that wants to handle splitting and indenting it. If not, we'll use a
     // default rule.
-    Rule rule;
-    if (_blockRules.containsKey(leftBracket)) {
-      rule = _blockRules[leftBracket];
-    }
-
-    Chunk argumentChunk;
-    if (_blockPreviousChunks.containsKey(leftBracket)) {
-      argumentChunk = _blockPreviousChunks[leftBracket];
-    }
+    var rule = _blockRules[leftBracket];
+    var argumentChunk = _blockPreviousChunks[leftBracket];
 
     // Create a rule for whether or not to split the block contents.
     builder.startRule(rule);
@@ -3461,7 +3469,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// given, ignores that rule inside the body when determining if it should
   /// split.
   void _endLiteralBody(Token rightBracket,
-      {Rule ignoredRule, bool forceSplit}) {
+      {Rule? ignoredRule, bool? forceSplit}) {
     forceSplit ??= false;
 
     // Put comments before the closing delimiter inside the block.
@@ -3513,14 +3521,14 @@ class SourceVisitor extends ThrowingAstVisitor {
   }
 
   /// If [keyword] is `const`, begins a new constant context.
-  void _startPossibleConstContext(Token keyword) {
+  void _startPossibleConstContext(Token? keyword) {
     if (keyword != null && keyword.keyword == Keyword.CONST) {
       _constNesting++;
     }
   }
 
   /// If [keyword] is `const`, ends the current outermost constant context.
-  void _endPossibleConstContext(Token keyword) {
+  void _endPossibleConstContext(Token? keyword) {
     if (keyword != null && keyword.keyword == Keyword.CONST) {
       _constNesting--;
     }
@@ -3547,7 +3555,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// splitting rule for the block. These are used for handling block-like
   /// expressions inside argument lists and spread collections inside if
   /// elements.
-  void beforeBlock(Token token, Rule rule, [Chunk previousChunk]) {
+  void beforeBlock(Token token, Rule rule, [Chunk? previousChunk]) {
     _blockRules[token] = rule;
     if (previousChunk != null) _blockPreviousChunks[token] = previousChunk;
   }
@@ -3580,7 +3588,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// [FunctionExpression].
   bool _isInLambda(AstNode node) =>
       node.parent is FunctionExpression &&
-      node.parent.parent is! FunctionDeclaration;
+      node.parent!.parent is! FunctionDeclaration;
 
   /// Writes the string literal [string] to the output.
   ///
@@ -3592,7 +3600,7 @@ class SourceVisitor extends ThrowingAstVisitor {
     writePrecedingCommentsAndNewlines(string);
 
     // Split each line of a multiline string into separate chunks.
-    var lines = string.lexeme.split(_formatter.lineEnding);
+    var lines = string.lexeme.split(_formatter.lineEnding!);
     var offset = string.offset;
 
     _writeText(lines.first, offset);
@@ -3615,16 +3623,14 @@ class SourceVisitor extends ThrowingAstVisitor {
   bool hasCommaAfter(AstNode node) => _commaAfter(node) != null;
 
   /// The comma token immediately following [node] if there is one, or `null`.
-  Token _commaAfter(AstNode node) {
-    if (node.endToken.next.type == TokenType.COMMA) {
-      return node.endToken.next;
-    }
+  Token? _commaAfter(AstNode node) {
+    var next = node.endToken.next!;
+    if (next.type == TokenType.COMMA) return next;
 
     // TODO(sdk#38990): endToken doesn't include the "?" on a nullable
     // function-typed formal, so check for that case and handle it.
-    if (node.endToken.next.type == TokenType.QUESTION &&
-        node.endToken.next.next.type == TokenType.COMMA) {
-      return node.endToken.next.next;
+    if (next.type == TokenType.QUESTION && next.next!.type == TokenType.COMMA) {
+      return next.next;
     }
 
     return null;
@@ -3632,7 +3638,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   /// Emit the given [modifier] if it's non null, followed by non-breaking
   /// whitespace.
-  void modifier(Token modifier) {
+  void modifier(Token? modifier) {
     token(modifier, after: space);
   }
 
@@ -3683,7 +3689,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   Chunk zeroSplit() => builder.split();
 
   /// Writes a single space split with its own rule.
-  Rule soloSplit([int cost]) {
+  Rule soloSplit([int? cost]) {
     var rule = Rule(cost);
     builder.startRule(rule);
     split();
@@ -3704,7 +3710,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   /// Does nothing if [token] is `null`. If [before] is given, it will be
   /// executed before the token is outout. Likewise, [after] will be called
   /// after the token is output.
-  void token(Token token, {void Function() before, void Function() after}) {
+  void token(Token? token, {void Function()? before, void Function()? after}) {
     if (token == null) return;
 
     writePrecedingCommentsAndNewlines(token);
@@ -3718,13 +3724,13 @@ class SourceVisitor extends ThrowingAstVisitor {
 
   /// Writes all formatted whitespace and comments that appear before [token].
   bool writePrecedingCommentsAndNewlines(Token token) {
-    var comment = token.precedingComments;
+    Token? comment = token.precedingComments;
 
     // For performance, avoid calculating newlines between tokens unless
     // actually needed.
     if (comment == null) {
       if (builder.needsToPreserveNewlines) {
-        builder.preserveNewlines(_startLine(token) - _endLine(token.previous));
+        builder.preserveNewlines(_startLine(token) - _endLine(token.previous!));
       }
 
       return false;
@@ -3733,14 +3739,14 @@ class SourceVisitor extends ThrowingAstVisitor {
     // If the token's comments are being moved by a fix, do not write them here.
     if (_suppressPrecedingCommentsAndNewLines.contains(token)) return false;
 
-    var previousLine = _endLine(token.previous);
+    var previousLine = _endLine(token.previous!);
     var tokenLine = _startLine(token);
 
     // Edge case: The analyzer includes the "\n" in the script tag's lexeme,
     // which confuses some of these calculations. We don't want to allow a
     // blank line between the script tag and a following comment anyway, so
     // just override the script tag's line.
-    if (token.previous.type == TokenType.SCRIPT_TAG) previousLine = tokenLine;
+    if (token.previous!.type == TokenType.SCRIPT_TAG) previousLine = tokenLine;
 
     var comments = <SourceComment>[];
     while (comment != null) {
@@ -3748,7 +3754,7 @@ class SourceVisitor extends ThrowingAstVisitor {
 
       // Don't preserve newlines at the top of the file.
       if (comment == token.precedingComments &&
-          token.previous.type == TokenType.EOF) {
+          token.previous!.type == TokenType.EOF) {
         previousLine = commentLine;
       }
 
@@ -3817,14 +3823,14 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///
   /// Returns `null` if the selection start has already been processed or is
   /// not within that range.
-  int _getSelectionStartWithin(int offset, int length) {
+  int? _getSelectionStartWithin(int offset, int length) {
     // If there is no selection, do nothing.
     if (_source.selectionStart == null) return null;
 
     // If we've already passed it, don't consider it again.
     if (_passedSelectionStart) return null;
 
-    var start = _source.selectionStart - offset;
+    var start = _source.selectionStart! - offset;
 
     // If it started in whitespace before this text, push it forward to the
     // beginning of the non-whitespace text.
@@ -3844,7 +3850,7 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///
   /// Returns `null` if the selection endpoint has already been processed or is
   /// not within that range.
-  int _getSelectionEndWithin(int offset, int length) {
+  int? _getSelectionEndWithin(int offset, int length) {
     // If there is no selection, do nothing.
     if (_source.selectionLength == null) return null;
 
@@ -3875,28 +3881,32 @@ class SourceVisitor extends ThrowingAstVisitor {
   ///
   /// Removes any trailing whitespace from the selection.
   int _findSelectionEnd() {
-    if (_selectionEnd != null) return _selectionEnd;
+    if (_selectionEnd != null) return _selectionEnd!;
 
-    _selectionEnd = _source.selectionStart + _source.selectionLength;
+    var end = _source.selectionStart! + _source.selectionLength!;
 
     // If the selection bumps to the end of the source, pin it there.
-    if (_selectionEnd == _source.text.length) return _selectionEnd;
+    if (end == _source.text.length) {
+      _selectionEnd = end;
+      return end;
+    }
 
     // Trim off any trailing whitespace. We want the selection to "rubberband"
     // around the selected non-whitespace tokens since the whitespace will
     // be munged by the formatter itself.
-    while (_selectionEnd > _source.selectionStart) {
+    while (end > _source.selectionStart!) {
       // Stop if we hit anything other than space, tab, newline or carriage
       // return.
-      var char = _source.text.codeUnitAt(_selectionEnd - 1);
+      var char = _source.text.codeUnitAt(end - 1);
       if (char != 0x20 && char != 0x09 && char != 0x0a && char != 0x0d) {
         break;
       }
 
-      _selectionEnd--;
+      end--;
     }
 
-    return _selectionEnd;
+    _selectionEnd = end;
+    return end;
   }
 
   /// Gets the 1-based line number that the beginning of [token] lies on.

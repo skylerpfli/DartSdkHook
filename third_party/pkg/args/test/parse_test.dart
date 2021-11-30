@@ -70,6 +70,19 @@ void main() {
         var results = parser.parse(['--$allCharacters']);
         expect(results[allCharacters], isTrue);
       });
+
+      test('can match by alias', () {
+        var parser = ArgParser()..addFlag('a', aliases: ['b']);
+        var results = parser.parse(['--b']);
+        expect(results['a'], isTrue);
+      });
+
+      test('can be negated by alias', () {
+        var parser = ArgParser()
+          ..addFlag('a', aliases: ['b'], defaultsTo: true, negatable: true);
+        var results = parser.parse(['--no-b']);
+        expect(results['a'], isFalse);
+      });
     });
 
     group('flags negated with "no-"', () {
@@ -109,7 +122,7 @@ void main() {
 
     group('callbacks', () {
       test('for present flags are invoked with the value', () {
-        var a;
+        bool? a;
         var parser = ArgParser();
         parser.addFlag('a', callback: (value) => a = value);
 
@@ -118,7 +131,7 @@ void main() {
       });
 
       test('for absent flags are invoked with the default value', () {
-        var a;
+        bool? a;
         var parser = ArgParser();
         parser.addFlag('a', defaultsTo: false, callback: (value) => a = value);
 
@@ -136,7 +149,7 @@ void main() {
       });
 
       test('for present options are invoked with the value', () {
-        var a;
+        String? a;
         var parser = ArgParser();
         parser.addOption('a', callback: (value) => a = value);
 
@@ -165,7 +178,7 @@ void main() {
       group('with addMultiOption', () {
         test('for multiple present, options are invoked with value as a list',
             () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a', callback: (value) => a = value);
 
@@ -180,7 +193,7 @@ void main() {
         test(
             'for single present, options are invoked with value as a single '
             'element list', () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a', callback: (value) => a = value);
 
@@ -189,7 +202,7 @@ void main() {
         });
 
         test('for absent, options are invoked with default value', () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a',
               defaultsTo: ['v', 'w'], callback: (value) => a = value);
@@ -199,7 +212,7 @@ void main() {
         });
 
         test('for absent, options are invoked with value as an empty list', () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a', callback: (value) => a = value);
 
@@ -208,7 +221,7 @@ void main() {
         });
 
         test('parses comma-separated strings', () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a', callback: (value) => a = value);
 
@@ -218,7 +231,7 @@ void main() {
 
         test("doesn't parse comma-separated strings with splitCommas: false",
             () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a',
               splitCommas: false, callback: (value) => a = value);
@@ -228,7 +241,7 @@ void main() {
         });
 
         test('parses empty strings', () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a', callback: (value) => a = value);
 
@@ -237,13 +250,19 @@ void main() {
         });
 
         test('with allowed parses comma-separated strings', () {
-          var a;
+          List<String>? a;
           var parser = ArgParser();
           parser.addMultiOption('a',
               allowed: ['v', 'w', 'x'], callback: (value) => a = value);
 
           parser.parse(['--a=v,w', '--a=x']);
           expect(a, equals(['v', 'w', 'x']));
+        });
+
+        test('can mix and match alias and regular name', () {
+          var parser = ArgParser()..addMultiOption('a', aliases: ['b']);
+          var results = parser.parse(['--a=1', '--b=2']);
+          expect(results['a'], ['1', '2']);
         });
       });
     });
@@ -433,6 +452,16 @@ void main() {
         expect(args['mode'], equals('debug'));
       });
 
+      test('do not throw if there is no allowed set with allowedHelp', () {
+        var parser = ArgParser();
+        parser.addOption('mode', allowedHelp: {
+          'debug': 'During development.',
+          'release': 'For customers.'
+        });
+        var args = parser.parse(['--mode=profile']);
+        expect(args['mode'], equals('profile'));
+      });
+
       test('throw if the value is not in the allowed set', () {
         var parser = ArgParser();
         parser.addOption('mode', allowed: ['debug', 'release']);
@@ -473,6 +502,34 @@ void main() {
         var results = parser.parse(['--verbose', 'chatty']);
         expect(results['verbose'], equals('chatty'));
         expect(results['Verbose'], equals('no'));
+      });
+
+      test('can be set by alias', () {
+        var parser = ArgParser()..addOption('a', aliases: ['b']);
+        var results = parser.parse(['--b=1']);
+        expect(results['a'], '1');
+      });
+
+      group('mandatory', () {
+        test('throw if no args', () {
+          var parser = ArgParser();
+          parser.addOption('username', mandatory: true);
+          throwsFormat(parser, []);
+        });
+
+        test('throw if no mandatory args', () {
+          var parser = ArgParser();
+          parser.addOption('test');
+          parser.addOption('username', mandatory: true);
+          throwsFormat(parser, ['--test', 'test']);
+        });
+
+        test('parse successfully', () {
+          var parser = ArgParser();
+          parser.addOption('test', mandatory: true);
+          var results = parser.parse(['--test', 'test']);
+          expect(results['test'], equals('test'));
+        });
       });
     });
 

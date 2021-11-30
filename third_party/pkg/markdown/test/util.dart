@@ -2,24 +2,19 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-// Used by `dataCasesUnder` below to find the current directory.
-library markdown.test.util;
+// @dart=2.9
 
-import 'dart:mirrors';
+import 'dart:isolate';
 
-import 'package:expected_output/expected_output.dart';
 import 'package:io/ansi.dart' as ansi;
 import 'package:markdown/markdown.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import '../tool/expected_output.dart';
 
 /// Run tests defined in "*.unit" files inside directory [name].
-void testDirectory(
-  String name, {
-  ExtensionSet extensionSet,
-}) {
-  for (var dataCase
-      in dataCasesUnder(library: #markdown.test.util, subdirectory: name)) {
+Future<void> testDirectory(String name, {ExtensionSet extensionSet}) async {
+  await for (var dataCase in dataCasesUnder(testDirectory: name)) {
     var description =
         '${dataCase.directory}/${dataCase.file}.unit ${dataCase.description}';
     validateCore(
@@ -31,15 +26,16 @@ void testDirectory(
   }
 }
 
-// Locate the "test" directory. Use mirrors so that this works with the test
-// package, which loads this suite into an isolate.
-String get _testDir =>
-    p.dirname(currentMirrorSystem().findLibrary(#markdown.test.util).uri.path);
+Future<String> get markdownPackageRoot async =>
+    p.dirname(p.dirname((await Isolate.resolvePackageUri(
+            Uri.parse('package:markdown/markdown.dart')))
+        .path));
 
 void testFile(String file,
     {Iterable<BlockSyntax> blockSyntaxes,
-    Iterable<InlineSyntax> inlineSyntaxes}) {
-  for (var dataCase in dataCasesInFile(path: p.join(_testDir, file))) {
+    Iterable<InlineSyntax> inlineSyntaxes}) async {
+  var directory = p.join(await markdownPackageRoot, 'test');
+  for (var dataCase in dataCasesInFile(path: p.join(directory, file))) {
     var description =
         '${dataCase.directory}/${dataCase.file}.unit ${dataCase.description}';
     validateCore(description, dataCase.input, dataCase.expectedOutput,

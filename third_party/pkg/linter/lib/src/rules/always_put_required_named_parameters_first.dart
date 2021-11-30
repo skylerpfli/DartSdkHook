@@ -7,19 +7,29 @@ import 'package:analyzer/dart/ast/visitor.dart';
 
 import '../analyzer.dart';
 
-const _desc = r'Put @required named parameters first.';
+const _desc = r'Put required named parameters first.';
 
 const _details = r'''
 
-**DO** specify `@required` on named parameter before other named parameters.
+**DO** specify `required` on named parameter before other named parameters.
 
 **GOOD:**
+```dart
+m({required a, b, c}) ;
 ```
+
+**BAD:**
+```dart
+m({b, c, required a}) ;
+```
+
+**GOOD:**
+```dart
 m({@required a, b, c}) ;
 ```
 
 **BAD:**
-```
+```dart
 m({b, c, @required a}) ;
 ```
 
@@ -52,9 +62,12 @@ class _Visitor extends SimpleAstVisitor<void> {
     var nonRequiredSeen = false;
     for (var param in node.parameters.where((p) => p.isNamed)) {
       var element = param.declaredElement;
-      if (element.hasRequired || element.isRequiredNamed) {
+      if (element != null && (element.hasRequired || element.isRequiredNamed)) {
         if (nonRequiredSeen) {
-          rule.reportLintForToken(param.identifier.token);
+          var identifier = param.identifier;
+          if (identifier != null) {
+            rule.reportLintForToken(identifier.token);
+          }
         }
       } else {
         nonRequiredSeen = true;

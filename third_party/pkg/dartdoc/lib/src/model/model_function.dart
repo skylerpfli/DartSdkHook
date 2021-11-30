@@ -45,7 +45,7 @@ class ModelFunctionTyped extends ModelElement
           for (var p in element.typeParameters)
             ModelElement.from(p, library, packageGraph),
         ],
-        super(element, library, packageGraph, null);
+        super(element, library, packageGraph);
 
   @override
   ModelElement get enclosingElement => library;
@@ -66,11 +66,13 @@ class ModelFunctionTyped extends ModelElement
   @override
   String get kind => 'function';
 
-  String get linkedReturnType => modelType.createLinkedReturnTypeName();
-
   // Food for mustache. TODO(jcollins-g): what about enclosing elements?
   bool get isInherited => false;
 
   @override
-  DefinedElementType get modelType => super.modelType;
+  FunctionTypedElement get element => super.element;
+
+  DefinedElementType _modelType;
+  DefinedElementType get modelType =>
+      _modelType ??= ElementType.from(element.type, library, packageGraph);
 }

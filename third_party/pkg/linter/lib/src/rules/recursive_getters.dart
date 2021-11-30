@@ -19,19 +19,19 @@ Recursive getters are getters which return themselves as a value.  This is
 usually a typo.
 
 **BAD:**
-```
+```dart
 int get field => field; // LINT
 ```
 
 **BAD:**
-```
+```dart
 int get otherField {
   return otherField; // LINT
 }
 ```
 
 **GOOD:**
-```
+```dart
 int get field => _field;
 ```
 
@@ -61,16 +61,17 @@ class _RecursiveGetterParentVisitor extends SimpleAstVisitor<bool> {
       node.target is ThisExpression;
 
   @override
-  bool visitSimpleIdentifier(SimpleIdentifier node) {
-    if (node.parent is ArgumentList ||
-        node.parent is ConditionalExpression ||
-        node.parent is ExpressionFunctionBody ||
-        node.parent is ReturnStatement) {
+  bool? visitSimpleIdentifier(SimpleIdentifier node) {
+    var parent = node.parent;
+    if (parent is ArgumentList ||
+        parent is ConditionalExpression ||
+        parent is ExpressionFunctionBody ||
+        parent is ReturnStatement) {
       return true;
     }
 
-    if (node.parent is PropertyAccess) {
-      return node.parent.accept(this);
+    if (parent is PropertyAccess) {
+      return parent.accept(this);
     }
 
     return false;
@@ -106,13 +107,13 @@ class _Visitor extends SimpleAstVisitor<void> {
     _verifyElement(node.body, element);
   }
 
-  void _verifyElement(AstNode node, ExecutableElement element) {
+  void _verifyElement(AstNode node, ExecutableElement? element) {
     final nodes = DartTypeUtilities.traverseNodesInDFS(node);
     nodes
         .where((n) =>
             n is SimpleIdentifier &&
             element == n.staticElement &&
-            n.accept(visitor))
+            (n.accept(visitor) ?? false))
         .forEach(rule.reportLint);
   }
 }

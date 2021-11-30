@@ -45,7 +45,7 @@ CancelableOperation debug(
     canceled = true;
     // Make sure the load test finishes so the engine can close.
     engine.resume();
-    if (debugger != null) debugger!.close();
+    debugger?.close();
   });
 }
 
@@ -138,8 +138,7 @@ class _Debugger {
         if (runtime.isDartVM) {
           var url = _suite.environment.observatoryUrl;
           if (url == null) {
-            print("${yellow}Observatory URL not found. Make sure you're using "
-                '${runtime.name} 1.11 or later.$noColor');
+            print('${yellow}Observatory URL not found.$noColor');
           } else {
             print('Observatory URL: $bold$url$noColor');
           }
@@ -154,8 +153,7 @@ class _Debugger {
           }
         }
 
-        var buffer =
-            StringBuffer('${bold}The test runner is paused.${noColor} ');
+        var buffer = StringBuffer('${bold}The test runner is paused.$noColor ');
         if (runtime.isDartVM) {
           buffer.write('Open the Observatory ');
         } else {

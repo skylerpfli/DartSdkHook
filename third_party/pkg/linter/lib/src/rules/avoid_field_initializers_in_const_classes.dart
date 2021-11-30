@@ -19,7 +19,7 @@ not allocate a useless field. As of April 2018 this is true for the VM, but not
 for code that will be compiled to JS.
 
 **BAD:**
-```
+```dart
 class A {
   final a = const [];
   const A();
@@ -27,7 +27,7 @@ class A {
 ```
 
 **GOOD:**
-```
+```dart
 class A {
   get a => const [];
   const A();
@@ -55,7 +55,7 @@ class AvoidFieldInitializersInConstClasses extends LintRule
 }
 
 class HasParameterReferenceVisitor extends RecursiveAstVisitor {
-  Iterable<ParameterElement> parameters;
+  Iterable<ParameterElement?> parameters;
 
   bool useParameter = false;
 
@@ -78,21 +78,23 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitConstructorFieldInitializer(ConstructorFieldInitializer node) {
-    final constructor = node.parent as ConstructorDeclaration;
-    if (constructor.constKeyword == null) return;
-    // no lint if several constructors
-    final constructorCount = constructor
-        .thisOrAncestorOfType<ClassDeclaration>()
-        .members
-        .whereType<ConstructorDeclaration>()
-        .length;
-    if (constructorCount > 1) return;
+    final declaration = node.parent;
+    if (declaration is ConstructorDeclaration) {
+      if (declaration.constKeyword == null) return;
+      // no lint if several constructors
+      final constructorCount = declaration
+          .thisOrAncestorOfType<ClassDeclaration>()!
+          .members
+          .whereType<ConstructorDeclaration>()
+          .length;
+      if (constructorCount > 1) return;
 
-    final visitor =
-        HasParameterReferenceVisitor(constructor.parameters.parameterElements);
-    node.expression.accept(visitor);
-    if (!visitor.useParameter) {
-      rule.reportLint(node);
+      final visitor = HasParameterReferenceVisitor(
+          declaration.parameters.parameterElements);
+      node.expression.accept(visitor);
+      if (!visitor.useParameter) {
+        rule.reportLint(node);
+      }
     }
   }
 
@@ -103,7 +105,11 @@ class _Visitor extends SimpleAstVisitor<void> {
     // only const class
     final parent = node.parent;
     if (parent is ClassDeclaration) {
-      if (parent.declaredElement.constructors.every((e) => !e.isConst)) {
+      var declaredElement = parent.declaredElement;
+      if (declaredElement == null) {
+        return;
+      }
+      if (declaredElement.constructors.every((e) => !e.isConst)) {
         return;
       }
       for (final variable in node.fields.variables) {

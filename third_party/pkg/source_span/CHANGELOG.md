@@ -1,4 +1,6 @@
-# 1.8.0-nullsafety.5-dev
+# 1.8.0
+
+* Stable release for null safety.
 
 # 1.8.0-nullsafety.4
 
@@ -14,7 +16,7 @@
 # 1.8.0-nullsafety.2
 
 * Revert unnecessary null check fix (sdk fix wont land in 2.10 stable).
-* Allow 2.10 stable and 2.11 dev sdks. 
+* Allow 2.10 stable and 2.11 dev sdks.
 
 # 1.8.0-nullsafety.1
 
@@ -25,7 +27,7 @@
 * Migrate to null safety.
   * Apis have been migrated to reflect the existing assumptions in the code
     and are not expected to be breaking.
-    
+
 # 1.7.0
 
 * Add a `SourceSpan.subspan()` extension method which returns a slice of an

@@ -14,8 +14,8 @@ import 'utils.dart';
 final redirectUrl = Uri.parse('http://example.com/redirect');
 
 void main() {
-  ExpectClient client;
-  oauth2.AuthorizationCodeGrant grant;
+  late ExpectClient client;
+  late oauth2.AuthorizationCodeGrant grant;
   setUp(() {
     client = ExpectClient();
     grant = oauth2.AuthorizationCodeGrant(
@@ -51,6 +51,29 @@ void main() {
             matches(r'&code_challenge=[A-Za-z0-9\+\/\-\_]{43}'),
             contains('&code_challenge_method=S256'),
             contains('&scope=scope+other%2Fscope')
+          ]));
+    });
+
+    test('builds the correct URL with passed in code verifier', () {
+      final codeVerifier =
+          'it1shei7LooGoh3looxaa4sieveijeib2zecauz2oo8aebae5aehee0ahPirewoh5Bo6Maexooqui3uL2si6ahweiv7shauc1shahxooveoB3aeyahsaiye0Egh3raix';
+      final expectedCodeChallenge =
+          'EjfFMv8TFPd3GuNxAn5COhlWBGpfZLimHett7ypJfJ0';
+      var grant = oauth2.AuthorizationCodeGrant(
+          'identifier',
+          Uri.parse('https://example.com/authorization'),
+          Uri.parse('https://example.com/token'),
+          secret: 'secret',
+          httpClient: client,
+          codeVerifier: codeVerifier);
+      expect(
+          grant.getAuthorizationUrl(redirectUrl).toString(),
+          allOf([
+            startsWith('https://example.com/authorization?response_type=code'),
+            contains('&client_id=identifier'),
+            contains('&redirect_uri=http%3A%2F%2Fexample.com%2Fredirect'),
+            contains('&code_challenge=$expectedCodeChallenge'),
+            contains('&code_challenge_method=S256')
           ]));
     });
 
@@ -200,7 +223,7 @@ void main() {
       expect(grant.handleAuthorizationCode('auth code'), throwsStateError);
     });
 
-    test('sends an authorization code request', () {
+    test('sends an authorization code request', () async {
       grant.getAuthorizationUrl(redirectUrl);
       client.expectRequest((request) {
         expect(request.method, equals('POST'));
@@ -226,11 +249,10 @@ void main() {
             headers: {'content-type': 'application/json'}));
       });
 
-      expect(grant.handleAuthorizationCode('auth code'),
-          completion(predicate((client) {
-        expect(client.credentials.accessToken, equals('access token'));
-        return true;
-      })));
+      expect(
+          await grant.handleAuthorizationCode('auth code'),
+          isA<oauth2.Client>().having((c) => c.credentials.accessToken,
+              'credentials.accessToken', 'access token'));
     });
   });
 
@@ -279,7 +301,8 @@ void main() {
           completion(equals('access token')));
     });
 
-    test('.handleAuthorizationCode sends an authorization code request', () {
+    test('.handleAuthorizationCode sends an authorization code request',
+        () async {
       grant.getAuthorizationUrl(redirectUrl);
       client.expectRequest((request) {
         expect(request.method, equals('POST'));
@@ -305,11 +328,10 @@ void main() {
             headers: {'content-type': 'application/json'}));
       });
 
-      expect(grant.handleAuthorizationCode('auth code'),
-          completion(predicate((client) {
-        expect(client.credentials.accessToken, equals('access token'));
-        return true;
-      })));
+      expect(
+          await grant.handleAuthorizationCode('auth code'),
+          isA<oauth2.Client>().having((c) => c.credentials.accessToken,
+              'credentials.accessToken', 'access token'));
     });
   });
 

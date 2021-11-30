@@ -6,7 +6,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:async/async.dart';
-
 import 'package:test_api/src/backend/group.dart'; // ignore: implementation_imports
 import 'package:test_api/src/backend/group_entry.dart'; // ignore: implementation_imports
 import 'package:test_api/src/backend/operating_system.dart'; // ignore: implementation_imports
@@ -18,7 +17,6 @@ import 'package:test_api/src/backend/test.dart'; // ignore: implementation_impor
 import 'package:test_api/src/utils.dart'; // ignore: implementation_imports
 import 'package:test_core/src/runner/reporter/multiplex.dart';
 
-import 'util/io.dart';
 import 'runner/application_exception.dart';
 import 'runner/configuration.dart';
 import 'runner/configuration/reporters.dart';
@@ -30,8 +28,8 @@ import 'runner/loader.dart';
 import 'runner/reporter.dart';
 import 'runner/reporter/compact.dart';
 import 'runner/reporter/expanded.dart';
-
-final _silentObservatory = const bool.fromEnvironment('SILENT_OBSERVATORY');
+import 'runner/runner_suite.dart';
+import 'util/io.dart';
 
 /// A class that loads and runs tests based on a [Configuration].
 ///
@@ -114,20 +112,6 @@ class Runner {
 
         var suites = _loadSuites();
 
-        var runTimes = _config.suiteDefaults.runtimes.map(_loader.findRuntime);
-
-        // TODO(grouma) - Remove this check when
-        // https://github.com/dart-lang/sdk/issues/31308 is resolved.
-        if (!_silentObservatory &&
-            runTimes.contains(Runtime.vm) &&
-            _config.debug) {
-          warn('You should set `SILENT_OBSERVATORY` to true when debugging the '
-              'VM as it will output the observatory URL by '
-              'default.\nThis breaks the various reporter contracts.'
-              '\nTo set the value define '
-              '`DART_VM_OPTIONS=-DSILENT_OBSERVATORY=true`.');
-        }
-
         if (_config.coverage != null) {
           await Directory(_config.coverage!).create(recursive: true);
         }
@@ -136,11 +120,10 @@ class Runner {
         if (_config.pauseAfterLoad) {
           success = await _loadThenPause(suites);
         } else {
-          _suiteSubscription = suites.listen(_engine.suiteSink.add);
+          var subscription =
+              _suiteSubscription = suites.listen(_engine.suiteSink.add);
           var results = await Future.wait(<Future>[
-            _suiteSubscription!
-                .asFuture()
-                .then((_) => _engine.suiteSink.close()),
+            subscription.asFuture().then((_) => _engine.suiteSink.close()),
             _engine.run()
           ], eagerError: true);
           success = results.last as bool?;
@@ -355,10 +338,9 @@ class Runner {
       }
 
       if (entry is! Group) return;
-      var group = entry;
 
       currentTags.addAll(newTags);
-      for (var child in group.entries) {
+      for (var child in entry.entries) {
         collect(child);
       }
       currentTags.removeAll(newTags);
@@ -382,7 +364,7 @@ class Runner {
   /// index. This makes the tests pretty tests across shards, and since the
   /// tests are continuous, makes us more likely to be able to re-use
   /// `setUpAll()` logic.
-  T _shardSuite<T extends Suite>(T suite) {
+  RunnerSuite _shardSuite(RunnerSuite suite) {
     if (_config.totalShards == null) return suite;
 
     var shardSize = suite.group.testCount / _config.totalShards!;
@@ -396,19 +378,19 @@ class Runner {
       return count >= shardStart && count < shardEnd;
     });
 
-    return filtered as T;
+    return filtered;
   }
 
   /// Loads each suite in [suites] in order, pausing after load for runtimes
   /// that support debugging.
   Future<bool> _loadThenPause(Stream<LoadSuite> suites) async {
-    _suiteSubscription = suites.asyncMap((loadSuite) async {
-      _debugOperation = debug(_engine, _reporter, loadSuite);
-      await _debugOperation!.valueOrCancellation();
+    var subscription = _suiteSubscription = suites.asyncMap((loadSuite) async {
+      var operation = _debugOperation = debug(_engine, _reporter, loadSuite);
+      await operation.valueOrCancellation();
     }).listen(null);
 
     var results = await Future.wait(<Future>[
-      _suiteSubscription!.asFuture().then((_) => _engine.suiteSink.close()),
+      subscription.asFuture().then((_) => _engine.suiteSink.close()),
       _engine.run()
     ], eagerError: true);
     return results.last as bool;

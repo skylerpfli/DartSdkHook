@@ -20,7 +20,7 @@ In most cases, it makes more sense to use a named constructor rather than a
 static method because it makes instantiation clearer.
 
 **BAD:**
-```
+```dart
 class Point {
   num x, y;
   Point(this.x, this.y);
@@ -32,7 +32,7 @@ class Point {
 ```
 
 **GOOD:**
-```
+```dart
 class Point {
   num x, y;
   Point(this.x, this.y);
@@ -83,12 +83,15 @@ class _Visitor extends SimpleAstVisitor<void> {
         returnType is InterfaceType &&
         parent.typeParameters == null &&
         node.typeParameters == null) {
-      var interfaceType = parent.declaredElement.thisType;
-      if (!context.typeSystem.isAssignableTo(returnType, interfaceType)) {
-        return;
-      }
-      if (_hasNewInvocation(returnType, node.body)) {
-        rule.reportLint(node.name);
+      var declaredElement = parent.declaredElement;
+      if (declaredElement != null) {
+        var interfaceType = declaredElement.thisType;
+        if (!context.typeSystem.isAssignableTo(returnType, interfaceType)) {
+          return;
+        }
+        if (_hasNewInvocation(returnType, node.body)) {
+          rule.reportLint(node.name);
+        }
       }
     }
   }

@@ -14,12 +14,12 @@ const _details = r'''
 **AVOID** using parenthesis when not needed.
 
 **GOOD:**
-```
+```dart
 a = b;
 ```
 
 **BAD:**
-```
+```dart
 a = (b);
 ```
 
@@ -142,7 +142,7 @@ class _Visitor extends SimpleAstVisitor<void> {
   /// Returns whether [node] "starts" with whitespace.
   ///
   /// That is, is there definitely whitespace after the first token in [node]?
-  bool _expressionStartsWithWhitespace(Expression node) =>
+  bool _expressionStartsWithWhitespace(Expression? node) =>
       // As in, `!(await foo)`.
       node is AwaitExpression ||
       // As in, `!(new Foo())`.

@@ -24,7 +24,7 @@ unknown.  Use `Object` if you are being explicit that you want an object that
 implements `==` and `hashCode`.
 
 **GOOD:**
-```
+```dart
 int foo = 10;
 final Bar bar = Bar();
 String baz = 'hello';
@@ -32,7 +32,7 @@ const int quux = 20;
 ```
 
 **BAD:**
-```
+```dart
 var foo = 10;
 final bar = Bar();
 const quux = 20;
@@ -44,7 +44,7 @@ declaration should be treated as optional.  For example, suppose you have a
 `Key` object whose type parameter you'd like to treat as optional.  Using the
 `@optionalTypeArgs` would look like this:
 
-```
+```dart
 import 'package:meta/meta.dart';
 
 @optionalTypeArgs
@@ -67,18 +67,14 @@ String _metaLibName = 'meta';
 String _optionalTypeArgsVarName = 'optionalTypeArgs';
 
 bool _isOptionallyParameterized(InterfaceType type) {
-  final metadata = type.element?.metadata;
-  if (metadata != null) {
-    return metadata
-        .any((ElementAnnotation a) => _isOptionalTypeArgs(a.element));
-  }
-  return false;
+  final metadata = type.element.metadata;
+  return metadata.any((ElementAnnotation a) => _isOptionalTypeArgs(a.element));
 }
 
-bool _isOptionalTypeArgs(Element element) =>
+bool _isOptionalTypeArgs(Element? element) =>
     element is PropertyAccessorElement &&
     element.name == _optionalTypeArgsVarName &&
-    element.library?.name == _metaLibName;
+    element.library.name == _metaLibName;
 
 class AlwaysSpecifyTypes extends LintRule implements NodeLintRule {
   AlwaysSpecifyTypes()
@@ -147,9 +143,10 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitSimpleFormalParameter(SimpleFormalParameter param) {
-    if (param.type == null &&
-        param.identifier != null &&
-        !isJustUnderscores(param.identifier.name)) {
+    var identifier = param.identifier;
+    if (identifier != null &&
+        param.type == null &&
+        !isJustUnderscores(identifier.name)) {
       if (param.keyword != null) {
         rule.reportLintForToken(param.keyword);
       } else {

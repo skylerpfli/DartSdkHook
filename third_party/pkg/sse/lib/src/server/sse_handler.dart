@@ -97,7 +97,7 @@ class SseConnection extends StreamChannelMixin<String> {
         _sink.add('data: ${json.encode(data)}\n');
         _sink.add('\n');
         await _outgoingStreamQueue.next; // Consume from stream if no errors.
-      } catch (StateError) {
+      } on StateError catch (_) {
         if (_keepAlive == null || _closedCompleter.isCompleted) {
           rethrow;
         }
@@ -193,6 +193,16 @@ class SseHandler {
 
   StreamQueue<SseConnection> _connectionsStream;
 
+  /// [_uri] is the URL under which the server is listening for
+  /// incoming bi-directional SSE connections.
+  ///
+  /// If [keepAlive] is supplied, connections will remain active for this
+  /// period after a disconnect and can be reconnected transparently. If there
+  /// is no reconnect within that period, the connection will be closed
+  /// normally.
+  ///
+  /// If [keepAlive] is not supplied, connections will be closed immediately
+  /// after a disconnect.
   SseHandler(this._uri, {Duration keepAlive}) : _keepAlive = keepAlive;
 
   StreamQueue<SseConnection> get connections =>
@@ -229,7 +239,6 @@ class SseHandler {
         _connections[clientId]?._handleDisconnect();
       });
     });
-    return shelf.Response.notFound('');
   }
 
   String _getOriginalPath(shelf.Request req) => req.requestedUri.path;

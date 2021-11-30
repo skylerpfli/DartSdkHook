@@ -37,6 +37,7 @@ import 'integration/prefer_asserts_in_initializer_lists.dart'
     as prefer_asserts_in_initializer_lists;
 import 'integration/prefer_const_constructors_in_immutables.dart'
     as prefer_const_constructors_in_immutables;
+import 'integration/prefer_mixin.dart' as prefer_mixin;
 import 'integration/prefer_relative_imports.dart' as prefer_relative_imports;
 import 'integration/public_member_api_docs.dart' as public_member_api_docs;
 import 'integration/sort_pub_dependencies.dart' as sort_pub_dependencies;
@@ -128,6 +129,7 @@ void coreTests() {
 
         final options = _getOptionsFromString(src);
         var configuredLints =
+            // ignore: cast_nullable_to_non_nullable
             (options['linter'] as YamlMap)['rules'] as YamlList;
 
         // rules are sorted
@@ -135,6 +137,18 @@ void coreTests() {
             configuredLints, orderedEquals(configuredLints.toList()..sort()));
 
         registerLintRules();
+
+        var registered = Analyzer.facade.registeredRules
+            .where((r) =>
+                r.maturity != Maturity.deprecated && !experiments.contains(r))
+            .map((r) => r.name);
+
+        for (var l in configuredLints) {
+          if (!registered.contains(l)) {
+            print(l);
+          }
+        }
+
         expect(
             configuredLints,
             unorderedEquals(Analyzer.facade.registeredRules
@@ -171,11 +185,12 @@ void ruleTests() {
     avoid_private_typedef_functions.main();
     sort_pub_dependencies.main();
     unnecessary_string_escapes.main();
+    prefer_mixin.main();
   });
 }
 
 /// Provide the options found in [optionsSource].
-Map<String, YamlNode> _getOptionsFromString(String optionsSource) {
+Map<String, YamlNode> _getOptionsFromString(String? optionsSource) {
   final options = <String, YamlNode>{};
   if (optionsSource == null) {
     return options;
@@ -187,13 +202,13 @@ Map<String, YamlNode> _getOptionsFromString(String optionsSource) {
   if (doc is YamlScalar && doc.value == null) {
     return options;
   }
-  if ((doc != null) && (doc is! YamlMap)) {
+  if (doc is! YamlMap) {
     throw Exception(
         'Bad options file format (expected map, got ${doc.runtimeType})');
   }
   if (doc is YamlMap) {
     doc.nodes.forEach((k, YamlNode v) {
-      Object key;
+      Object? key;
       if (k is YamlScalar) {
         key = k.value;
       }
@@ -201,11 +216,11 @@ Map<String, YamlNode> _getOptionsFromString(String optionsSource) {
         throw Exception('Bad options file format (expected String scope key, '
             'got ${k.runtimeType})');
       }
-      if (v != null && v is! YamlNode) {
+      if (v is! YamlNode) {
         throw Exception('Bad options file format (expected Node value, '
             'got ${v.runtimeType}: `${v.toString()}`)');
       }
-      options[key as String] = v;
+      options[key] = v;
     });
   }
   return options;

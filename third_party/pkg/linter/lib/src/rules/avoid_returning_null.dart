@@ -23,7 +23,7 @@ generally expected to return non-nullable values.  Thus, returning null where a
 primitive type was expected can lead to runtime exceptions.
 
 **BAD:**
-```
+```dart
 bool getBool() => null;
 num getNum() => null;
 int getInt() => null;
@@ -31,7 +31,7 @@ double getDouble() => null;
 ```
 
 **GOOD:**
-```
+```dart
 bool getBool() => false;
 num getNum() => -1;
 int getInt() => -1;
@@ -75,25 +75,29 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    if (_isPrimitiveType(node.declaredElement.returnType)) {
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null &&
+        _isPrimitiveType(declaredElement.returnType)) {
       _visitFunctionBody(node.body);
     }
   }
 
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
-    if (_isPrimitiveType(node.declaredElement.returnType)) {
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null &&
+        _isPrimitiveType(declaredElement.returnType)) {
       _visitFunctionBody(node.body);
     }
   }
 
-  void _visitFunctionBody(FunctionBody node) {
+  void _visitFunctionBody(FunctionBody? node) {
     if (node is ExpressionFunctionBody &&
         DartTypeUtilities.isNullLiteral(node.expression)) {
       rule.reportLint(node);
       return;
     }
-    DartTypeUtilities.traverseNodesInDFS(node,
+    DartTypeUtilities.traverseNodesInDFS(node!,
             excludeCriteria: _isFunctionExpression)
         .where(_isReturnNull)
         .forEach(rule.reportLint);

@@ -5,6 +5,8 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/type.dart';
+import 'package:collection/collection.dart' show IterableExtension;
+
 import '../analyzer.dart';
 import '../util/dart_type_utilities.dart';
 
@@ -18,18 +20,6 @@ _InterfaceTypePredicate _buildImplementsDefinitionPredicate(
         interface.element.name == definition.name &&
         interface.element.library.name == definition.library;
 
-/// Returns all implemented interfaces of [type].
-///
-/// This flattens all of the super-interfaces of [type] into one list.
-List<InterfaceType> _findImplementedInterfaces(InterfaceType type,
-        {List<InterfaceType> accumulator = const []}) =>
-    accumulator.contains(type)
-        ? accumulator
-        : type.interfaces.fold(
-            <InterfaceType>[type],
-            (List<InterfaceType> acc, InterfaceType e) => List.from(acc)
-              ..addAll(_findImplementedInterfaces(e, accumulator: acc)));
-
 /// Returns the first type argument on [definition], as implemented by [type].
 ///
 /// In the simplest case, [type] is the same class as [definition]. For
@@ -40,8 +30,8 @@ List<InterfaceType> _findImplementedInterfaces(InterfaceType type,
 /// [definition]. For example, given the definition `Set<E>` and the type `A`
 /// where `A implements B<List, String>` and `B<E, F> implements Set<F>, C<E>`,
 /// this function returns the DartType for `String`.
-DartType _findIterableTypeArgument(
-    InterfaceTypeDefinition definition, InterfaceType type,
+DartType? _findIterableTypeArgument(
+    InterfaceTypeDefinition definition, InterfaceType? type,
     {List<InterfaceType> accumulator = const []}) {
   if (type == null ||
       type.isDartCoreObject ||
@@ -55,9 +45,8 @@ DartType _findIterableTypeArgument(
     return type.typeArguments.first;
   }
 
-  final implementedInterfaces = _findImplementedInterfaces(type);
-  final interface =
-      implementedInterfaces.firstWhere(predicate, orElse: () => null);
+  final implementedInterfaces = type.allSupertypes;
+  final interface = implementedInterfaces.firstWhereOrNull(predicate);
   if (interface != null && interface.typeArguments.isNotEmpty) {
     return interface.typeArguments.first;
   }
@@ -104,9 +93,10 @@ abstract class UnrelatedTypesProcessors extends SimpleAstVisitor<void> {
     // arduous task of determining whether the method target implements
     // [definition].
 
-    DartType targetType;
-    if (node.target != null) {
-      targetType = node.target.staticType;
+    DartType? targetType;
+    var target = node.target;
+    if (target != null) {
+      targetType = target.staticType;
     } else {
       final classDeclaration =
           node.thisOrAncestorOfType<ClassOrMixinDeclaration>();

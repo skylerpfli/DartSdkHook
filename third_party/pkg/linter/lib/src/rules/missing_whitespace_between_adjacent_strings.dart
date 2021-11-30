@@ -18,14 +18,14 @@ With long text split accross adjacent strings it's easy to forget a whitespace
 between strings.
 
 **BAD:**
-```
+```dart
 var s =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed'
   'do eiusmod tempor incididunt ut labore et dolore magna';
 ```
 
 **GOOD:**
-```
+```dart
 var s =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed '
   'do eiusmod tempor incididunt ut labore et dolore magna';
@@ -58,8 +58,9 @@ class _Visitor extends RecursiveAstVisitor<void> {
   @override
   void visitAdjacentStrings(AdjacentStrings node) {
     // skip regexp
-    if (node.parent is ArgumentList) {
-      final parentParent = node.parent.parent;
+    var parent = node.parent;
+    if (parent is ArgumentList) {
+      final parentParent = parent.parent;
       if (_isRegExpInstanceCreation(parentParent) ||
           parentParent is MethodInvocation &&
               parentParent.realTarget == null &&
@@ -102,7 +103,7 @@ class _Visitor extends RecursiveAstVisitor<void> {
   bool _startsWithWhitespace(String value) =>
       _whitespaces.any(value.startsWith);
 
-  static bool _isRegExpInstanceCreation(AstNode node) {
+  static bool _isRegExpInstanceCreation(AstNode? node) {
     if (node is InstanceCreationExpression) {
       var constructorElement = node.constructorName.staticElement;
       return constructorElement != null &&

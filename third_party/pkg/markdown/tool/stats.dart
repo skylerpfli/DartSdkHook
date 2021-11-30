@@ -1,3 +1,9 @@
+// Copyright (c) 2020, the Dart project authors.  Please see the AUTHORS file
+// for details. All rights reserved. Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
+
+// @dart=2.9
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -5,9 +11,9 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:collection/collection.dart';
-import 'package:expected_output/expected_output.dart';
 import 'package:path/path.dart' as p;
 
+import '../tool/expected_output.dart';
 import 'stats_lib.dart';
 
 final _configs =

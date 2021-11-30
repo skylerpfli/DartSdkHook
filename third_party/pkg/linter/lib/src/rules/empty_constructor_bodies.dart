@@ -20,7 +20,7 @@ semicolon.  This is required for const constructors.  For consistency and
 brevity, other constructors should also do this.
 
 **GOOD:**
-```
+```dart
 class Point {
   int x, y;
   Point(this.x, this.y);
@@ -28,7 +28,7 @@ class Point {
 ```
 
 **BAD:**
-```
+```dart
 class Point {
   int x, y;
   Point(this.x, this.y) {}
@@ -60,10 +60,11 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
-    if (node.body is BlockFunctionBody) {
-      final block = (node.body as BlockFunctionBody).block;
+    var body = node.body;
+    if (body is BlockFunctionBody) {
+      final block = body.block;
       if (block.statements.isEmpty) {
-        if (block.endToken?.precedingComments == null) {
+        if (block.endToken.precedingComments == null) {
           rule.reportLint(block);
         }
       }

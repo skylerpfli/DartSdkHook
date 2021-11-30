@@ -4,13 +4,17 @@
 
 import 'package:dartdoc/src/model/model.dart';
 
-typedef ContainerSidebar = String Function(Container, TemplateData);
-typedef LibrarySidebar = String Function(Library, TemplateData);
+typedef ContainerSidebar = String Function(
+    Container, TemplateDataWithContainer);
+typedef LibrarySidebar = String Function(Library, TemplateDataWithLibrary);
 
 abstract class TemplateOptions {
   String get relCanonicalPrefix;
   String get toolVersion;
   bool get useBaseHref;
+  String get customHeaderContent;
+  String get customFooterContent;
+  String get customInnerFooterText;
 }
 
 abstract class TemplateData<T extends Documentable> {
@@ -46,7 +50,7 @@ abstract class TemplateData<T extends Documentable> {
 
   String get bareHref {
     if (self is Indexable) {
-      return (self as Indexable).href.replaceAll(HTMLBASE_PLACEHOLDER, '');
+      return (self as Indexable).href.replaceAll(htmlBasePlaceholder, '');
     }
     return '';
   }
@@ -60,6 +64,26 @@ abstract class TemplateData<T extends Documentable> {
   String _layoutTitle(String name, String kind, bool isDeprecated) =>
       _packageGraph.rendererFactory.templateRenderer
           .composeLayoutTitle(name, kind, isDeprecated);
+
+  String get customHeader => htmlOptions.customHeaderContent;
+
+  String get customFooter => htmlOptions.customFooterContent;
+
+  String get customInnerFooter => htmlOptions.customInnerFooterText;
+}
+
+/// A [TemplateData] which contains a library, for rendering the
+/// sidebar-for-library.
+abstract class TemplateDataWithLibrary<T extends Documentable>
+    implements TemplateData<T> {
+  Library get library;
+}
+
+/// A [TemplateData] which contains a container, for rendering the
+/// sidebar-for-container.
+abstract class TemplateDataWithContainer<T extends Documentable>
+    implements TemplateData<T> {
+  Container get container;
 }
 
 class PackageTemplateData extends TemplateData<Package> {
@@ -119,7 +143,9 @@ class CategoryTemplateData extends TemplateData<Category> {
   Category get self => category;
 }
 
-class LibraryTemplateData extends TemplateData<Library> {
+class LibraryTemplateData extends TemplateData<Library>
+    implements TemplateDataWithLibrary<Library> {
+  @override
   final Library library;
   final LibrarySidebar _sidebarForLibrary;
 
@@ -165,8 +191,10 @@ class MixinTemplateData extends ClassTemplateData<Mixin> {
 }
 
 /// Base template data class for [Class], [Enum], and [Mixin].
-class ClassTemplateData<T extends Class> extends TemplateData<T> {
+class ClassTemplateData<T extends Class> extends TemplateData<T>
+    implements TemplateDataWithLibrary<T>, TemplateDataWithContainer<T> {
   final Class clazz;
+  @override
   final Library library;
   Class _objectType;
   final LibrarySidebar _sidebarForLibrary;
@@ -184,6 +212,7 @@ class ClassTemplateData<T extends Class> extends TemplateData<T> {
   String get sidebarForLibrary => _sidebarForLibrary(library, this);
   String get sidebarForContainer => _sidebarForContainer(container, this);
 
+  @override
   Container get container => clazz;
 
   @override
@@ -219,8 +248,10 @@ class ClassTemplateData<T extends Class> extends TemplateData<T> {
 }
 
 /// Base template data class for [Extension].
-class ExtensionTemplateData<T extends Extension> extends TemplateData<T> {
+class ExtensionTemplateData<T extends Extension> extends TemplateData<T>
+    implements TemplateDataWithLibrary<T>, TemplateDataWithContainer<T> {
   final T extension;
+  @override
   final Library library;
   final ContainerSidebar _sidebarForContainer;
   final LibrarySidebar _sidebarForLibrary;
@@ -237,6 +268,7 @@ class ExtensionTemplateData<T extends Extension> extends TemplateData<T> {
   String get sidebarForContainer => _sidebarForContainer(container, this);
   String get sidebarForLibrary => _sidebarForLibrary(library, this);
 
+  @override
   Container get container => extension;
 
   @override
@@ -258,7 +290,11 @@ class ExtensionTemplateData<T extends Extension> extends TemplateData<T> {
   String get htmlBase => '../';
 }
 
-class ConstructorTemplateData extends TemplateData<Constructor> {
+class ConstructorTemplateData extends TemplateData<Constructor>
+    implements
+        TemplateDataWithLibrary<Constructor>,
+        TemplateDataWithContainer<Constructor> {
+  @override
   final Library library;
   final Class clazz;
   final Constructor constructor;
@@ -275,6 +311,7 @@ class ConstructorTemplateData extends TemplateData<Constructor> {
 
   String get sidebarForContainer => _sidebarForContainer(container, this);
 
+  @override
   Container get container => clazz;
   @override
   Constructor get self => constructor;
@@ -294,7 +331,7 @@ class ConstructorTemplateData extends TemplateData<Constructor> {
   @override
   String get metaDescription =>
       'API docs for the ${constructor.name} constructor from the '
-      '${clazz} class from the ${library.name} library, '
+      '$clazz class from the ${library.name} library, '
       'for the Dart programming language.';
 }
 
@@ -314,8 +351,10 @@ class EnumTemplateData extends ClassTemplateData<Enum> {
   Enum get self => eNum;
 }
 
-class FunctionTemplateData extends TemplateData<ModelFunction> {
+class FunctionTemplateData extends TemplateData<ModelFunction>
+    implements TemplateDataWithLibrary<ModelFunction> {
   final ModelFunction function;
+  @override
   final Library library;
   final LibrarySidebar _sidebarForLibrary;
 
@@ -343,9 +382,14 @@ class FunctionTemplateData extends TemplateData<ModelFunction> {
   String get htmlBase => '../';
 }
 
-class MethodTemplateData extends TemplateData<Method> {
+class MethodTemplateData extends TemplateData<Method>
+    implements
+        TemplateDataWithLibrary<Method>,
+        TemplateDataWithContainer<Method> {
+  @override
   final Library library;
   final Method method;
+  @override
   final Container container;
   final ContainerSidebar _sidebarForContainer;
 
@@ -363,7 +407,7 @@ class MethodTemplateData extends TemplateData<Method> {
   Method get self => method;
   @override
   String get title =>
-      '${method.name} method - ${container.name} ${containerDesc} - '
+      '${method.name} method - ${container.name} $containerDesc - '
       '${library.name} library - Dart API';
   @override
   String get layoutTitle => _layoutTitle(
@@ -371,7 +415,7 @@ class MethodTemplateData extends TemplateData<Method> {
   @override
   String get metaDescription =>
       'API docs for the ${method.name} method from the '
-      '${container.name} ${containerDesc}, for the Dart programming language.';
+      '${container.name} $containerDesc, for the Dart programming language.';
   @override
   List<Documentable> get navLinks => [_packageGraph.defaultPackage, library];
   @override
@@ -380,8 +424,13 @@ class MethodTemplateData extends TemplateData<Method> {
   String get htmlBase => '../../';
 }
 
-class PropertyTemplateData extends TemplateData<Field> {
+class PropertyTemplateData extends TemplateData<Field>
+    implements
+        TemplateDataWithLibrary<Field>,
+        TemplateDataWithContainer<Field> {
+  @override
   final Library library;
+  @override
   final Container container;
   final Field property;
   final ContainerSidebar _sidebarForContainer;
@@ -400,7 +449,7 @@ class PropertyTemplateData extends TemplateData<Field> {
 
   @override
   String get title =>
-      '${property.name} ${property.kind} - ${container.name} ${containerDesc} - '
+      '${property.name} ${property.kind} - ${container.name} $containerDesc - '
       '${library.name} library - Dart API';
   @override
   String get layoutTitle =>
@@ -408,7 +457,7 @@ class PropertyTemplateData extends TemplateData<Field> {
   @override
   String get metaDescription =>
       'API docs for the ${property.name} ${property.kind} from the '
-      '${container.name} ${containerDesc}, for the Dart programming language.';
+      '${container.name} $containerDesc, for the Dart programming language.';
   @override
   List<Documentable> get navLinks => [_packageGraph.defaultPackage, library];
   @override
@@ -417,7 +466,9 @@ class PropertyTemplateData extends TemplateData<Field> {
   String get htmlBase => '../../';
 }
 
-class TypedefTemplateData extends TemplateData<Typedef> {
+class TypedefTemplateData extends TemplateData<Typedef>
+    implements TemplateDataWithLibrary<Typedef> {
+  @override
   final Library library;
   final Typedef typeDef;
   final LibrarySidebar _sidebarForLibrary;
@@ -447,7 +498,9 @@ class TypedefTemplateData extends TemplateData<Typedef> {
   String get htmlBase => '../';
 }
 
-class TopLevelPropertyTemplateData extends TemplateData<TopLevelVariable> {
+class TopLevelPropertyTemplateData extends TemplateData<TopLevelVariable>
+    implements TemplateDataWithLibrary<TopLevelVariable> {
+  @override
   final Library library;
   final TopLevelVariable property;
   final LibrarySidebar _sidebarForLibrary;

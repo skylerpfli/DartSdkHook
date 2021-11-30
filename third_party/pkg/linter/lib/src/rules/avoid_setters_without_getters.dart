@@ -6,7 +6,6 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 
 import '../analyzer.dart';
-import '../ast.dart';
 import '../util/dart_type_utilities.dart';
 
 const _desc = r'Avoid setters without getters.';
@@ -20,7 +19,7 @@ inconsistencies.  Doing this could allow you to set a property to some value,
 but then upon observing the property's value, it could easily be different.
 
 **BAD:**
-```
+```dart
 class Bad {
   int l, r;
 
@@ -31,7 +30,7 @@ class Bad {
 ```
 
 **GOOD:**
-```
+```dart
 class Good {
   int l, r;
 
@@ -74,12 +73,11 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
-    for (var member in node.members.where(isMethod)) {
-      var method = member as MethodDeclaration;
-      if (method.isSetter &&
-          !_hasInheritedSetter(method) &&
-          !_hasGetter(method)) {
-        rule.reportLint(method.name);
+    for (var member in node.members.whereType<MethodDeclaration>()) {
+      if (member.isSetter &&
+          !_hasInheritedSetter(member) &&
+          !_hasGetter(member)) {
+        rule.reportLint(member.name);
       }
     }
   }

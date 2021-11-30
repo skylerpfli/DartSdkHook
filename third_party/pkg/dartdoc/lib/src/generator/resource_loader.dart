@@ -6,35 +6,43 @@
 library dartdoc.resource_loader;
 
 import 'dart:convert' show utf8;
-import 'dart:io' show File;
 import 'dart:isolate' show Isolate;
+import 'package:analyzer/file_system/file_system.dart';
+import 'package:meta/meta.dart';
 
-/// Loads a `package:` resource as a String.
-Future<String> loadAsString(String path) async {
-  var bytes = await loadAsBytes(path);
+extension ResourceLoader on ResourceProvider {
+  /// Loads a `package:` resource as a String.
+  Future<String> loadResourceAsString(String path) async {
+    var bytes = await loadResourceAsBytes(path);
 
-  return utf8.decode(bytes);
-}
-
-/// Loads a `package:` resource as an [List<int>].
-Future<List<int>> loadAsBytes(String path) async {
-  if (!path.startsWith('package:')) {
-    throw ArgumentError('path must begin with package:');
+    return utf8.decode(bytes);
   }
 
-  var uri = await _resolveUri(Uri.parse(path));
-  return File.fromUri(uri).readAsBytes();
-}
+  /// Loads a `package:` resource as an [List<int>].
+  Future<List<int>> loadResourceAsBytes(String path) async {
+    if (!path.startsWith('package:')) {
+      throw ArgumentError('path must begin with package:');
+    }
 
-/// Helper function for resolving to a non-relative, non-package URI.
-Future<Uri> _resolveUri(Uri uri) {
-  if (uri.scheme == 'package') {
-    return Isolate.resolvePackageUri(uri).then((resolvedUri) {
-      if (resolvedUri == null) {
-        throw ArgumentError.value(uri, 'uri', 'Unknown package');
-      }
-      return resolvedUri;
-    });
+    return (await getResourceFile(path)).readAsBytesSync();
   }
-  return Future<Uri>.value(Uri.base.resolveUri(uri));
+
+  Future<File> getResourceFile(String path) async {
+    var uri = await resolveResourceUri(Uri.parse(path));
+    return getFile(uri.toFilePath());
+  }
+
+  /// Helper function for resolving to a non-relative, non-package URI.
+  @visibleForTesting
+  Future<Uri> resolveResourceUri(Uri uri) {
+    if (uri.scheme == 'package') {
+      return Isolate.resolvePackageUri(uri).then((resolvedUri) {
+        if (resolvedUri == null) {
+          throw ArgumentError.value(uri, 'uri', 'Unknown package');
+        }
+        return resolvedUri;
+      });
+    }
+    return Future<Uri>.value(Uri.base.resolveUri(uri));
+  }
 }

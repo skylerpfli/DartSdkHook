@@ -1,3 +1,8 @@
+// Copyright (c) 2021, the Dart project authors.  Please see the AUTHORS file
+// for details. All rights reserved. Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
+
+@Timeout.factor(2)
 import 'dart:convert';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
@@ -25,7 +30,7 @@ class Context<T> {
 };
 
 const _libraryFrontMatter = '''
-@Renderer(#renderFoo, Context<Foo>(), visibleTypes: {Bar})
+@Renderer(#renderFoo, Context<Foo>(), visibleTypes: {Bar, Baz})
 library foo;
 import 'package:mustachio/annotations.dart';
 ''';
@@ -35,7 +40,7 @@ void main() {
 
   Future<LibraryElement> resolveGeneratedLibrary(
       InMemoryAssetWriter writer) async {
-    var rendererAsset = AssetId.parse('foo|lib/foo.renderers.dart');
+    var rendererAsset = AssetId('foo', 'lib/foo.renderers.dart');
     var writtenStrings = writer.assets
         .map((id, content) => MapEntry(id.toString(), utf8.decode(content)));
     return await resolveSources(writtenStrings,
@@ -73,18 +78,25 @@ $sourceLibraryContent
     setUpAll(() async {
       writer = InMemoryAssetWriter();
       await testMustachioBuilder('''
-abstract class FooBase {
+abstract class FooBase2<T> {
+  T get generic;
+}
+abstract class FooBase<T extends Baz> extends FooBase2<T> {
   Bar get bar;
 }
-class Foo extends FooBase {
+mixin Mix<E> on FooBase<Baz> {
+  String get field => 'Mix.field';
+}
+abstract class Foo extends FooBase with Mix<int> {
   String s1 = "s1";
   bool b1 = false;
   List<int> l1 = [1, 2, 3];
 }
 class Bar {}
+class Baz {}
 ''');
       renderersLibrary = await resolveGeneratedLibrary(writer);
-      var rendererAsset = AssetId.parse('foo|lib/foo.renderers.dart');
+      var rendererAsset = AssetId('foo', 'lib/foo.renderers.dart');
       generatedContent = utf8.decode(writer.assets[rendererAsset]);
     });
 
@@ -92,19 +104,21 @@ class Bar {}
       // The render function for Foo
       expect(
           generatedContent,
-          contains(
-              'String _render_FooBase(FooBase context, List<MustachioNode> ast,'));
+          contains('String _render_FooBase<T extends Baz>(\n'
+              '    FooBase<T> context, List<MustachioNode> ast, Template template,'));
       // The renderer class for Foo
-      expect(generatedContent,
-          contains('class _Renderer_FooBase extends RendererBase<FooBase>'));
+      expect(
+          generatedContent,
+          contains(
+              'class _Renderer_FooBase<T extends Baz> extends RendererBase<FooBase<T>>'));
     });
 
     test('for Object', () {
       // The render function for Object
       expect(
           generatedContent,
-          contains(
-              'String _render_Object(Object context, List<MustachioNode> ast,'));
+          contains('String _render_Object(\n'
+              '    Object context, List<MustachioNode> ast, Template template,'));
       // The renderer class for Object
       expect(generatedContent,
           contains('class _Renderer_Object extends RendererBase<Object> {'));
@@ -116,85 +130,79 @@ class Bar {}
       expect(renderersLibrary.getType('_Renderer_FooBase'), isNotNull);
     });
 
+    test('for a class which is mixed into a rendered class', () {
+      expect(renderersLibrary.getTopLevelFunction('_render_Mix'), isNotNull);
+      expect(renderersLibrary.getType('_Renderer_Mix'), isNotNull);
+    });
+
     test('for a type found in a getter', () {
       expect(renderersLibrary.getTopLevelFunction('_render_Bar'), isNotNull);
       expect(renderersLibrary.getType('_Renderer_Bar'), isNotNull);
+    });
+
+    test('for a generic, bounded type found in a getter', () {
+      expect(renderersLibrary.getTopLevelFunction('_render_Baz'), isNotNull);
+      expect(renderersLibrary.getType('_Renderer_Baz'), isNotNull);
     });
 
     test('with a property map', () {
       expect(
           generatedContent,
           contains(
-              'static Map<String, Property<CT_>> propertyMap<CT_ extends Foo>() => {'));
+              'static Map<String, Property<CT_>> propertyMap<CT_ extends Foo>() =>'));
     });
 
     test('with a property map which references the superclass', () {
       expect(generatedContent,
-          contains('..._Renderer_FooBase.propertyMap<CT_>(),'));
+          contains('..._Renderer_FooBase.propertyMap<Baz, CT_>(),'));
+    });
+
+    test('with a property map which references a mixed in class', () {
+      expect(generatedContent,
+          contains('..._Renderer_Mix.propertyMap<int, CT_>(),'));
     });
 
     test('with a property map with a bool property', () {
       expect(generatedContent, contains('''
-        'b1': Property(
-          getValue: (CT_ c) => c.b1,
-          renderVariable:
-              (CT_ c, Property<CT_> self, List<String> remainingNames) {
-            if (remainingNames.isEmpty) {
-              return self.getValue(c).toString();
-            } else {
-              throw MustachioResolutionError(
-                  _simpleResolveErrorMessage(remainingNames, 'bool'));
-            }
-          },
-          getBool: (CT_ c) => c.b1 == true,
-        ),
+                'b1': Property(
+                  getValue: (CT_ c) => c.b1,
+                  renderVariable: (CT_ c, Property<CT_> self,
+                          List<String> remainingNames) =>
+                      self.renderSimpleVariable(c, remainingNames, 'bool'),
+                  getBool: (CT_ c) => c.b1 == true,
+                ),
 '''));
     });
 
     test('with a property map with an Iterable property', () {
       expect(generatedContent, contains('''
-        'l1': Property(
-          getValue: (CT_ c) => c.l1,
-          renderVariable:
-              (CT_ c, Property<CT_> self, List<String> remainingNames) {
-            if (remainingNames.isEmpty) {
-              return self.getValue(c).toString();
-            } else {
-              throw MustachioResolutionError(
-                  _simpleResolveErrorMessage(remainingNames, 'List<int>'));
-            }
-          },
-          isEmptyIterable: (CT_ c) => c.l1?.isEmpty ?? true,
-          renderIterable:
-              (CT_ c, RendererBase<CT_> r, List<MustachioNode> ast) {
-            var buffer = StringBuffer();
-            for (var e in c.l1) {
-              buffer.write(renderSimple(e, ast, r.template, parent: r));
-            }
-            return buffer.toString();
-          },
-        ),
+                'l1': Property(
+                  getValue: (CT_ c) => c.l1,
+                  renderVariable: (CT_ c, Property<CT_> self,
+                          List<String> remainingNames) =>
+                      self.renderSimpleVariable(c, remainingNames, 'List<int>'),
+                  renderIterable:
+                      (CT_ c, RendererBase<CT_> r, List<MustachioNode> ast) {
+                    return c.l1.map(
+                        (e) => renderSimple(e, ast, r.template, parent: r));
+                  },
+                ),
 '''));
     });
 
     test('with a property map with a non-bool, non-Iterable property', () {
       expect(generatedContent, contains('''
-        's1': Property(
-          getValue: (CT_ c) => c.s1,
-          renderVariable:
-              (CT_ c, Property<CT_> self, List<String> remainingNames) {
-            if (remainingNames.isEmpty) {
-              return self.getValue(c).toString();
-            } else {
-              throw MustachioResolutionError(
-                  _simpleResolveErrorMessage(remainingNames, 'String'));
-            }
-          },
-          isNullValue: (CT_ c) => c.s1 == null,
-          renderValue: (CT_ c, RendererBase<CT_> r, List<MustachioNode> ast) {
-            return renderSimple(c.s1, ast, r.template, parent: r);
-          },
-        ),
+                's1': Property(
+                  getValue: (CT_ c) => c.s1,
+                  renderVariable: (CT_ c, Property<CT_> self,
+                          List<String> remainingNames) =>
+                      self.renderSimpleVariable(c, remainingNames, 'String'),
+                  isNullValue: (CT_ c) => c.s1 == null,
+                  renderValue:
+                      (CT_ c, RendererBase<CT_> r, List<MustachioNode> ast) {
+                    return renderSimple(c.s1, ast, r.template, parent: r);
+                  },
+                ),
 '''));
     });
   });
@@ -203,6 +211,7 @@ class Bar {}
     await testMustachioBuilder('''
 class Foo {}
 class Bar {}
+class Baz {}
 ''', libraryFrontMatter: '''
 @Renderer(#renderFoo, Context<Foo>())
 @Renderer(#renderBar, Context<Bar>())
@@ -229,26 +238,27 @@ class FooBase<T> {}
 class Foo<T> extends FooBase<T> {}
 class BarBase<T> {}
 class Bar<T> extends BarBase<int> {}
+class Baz {}
 ''', libraryFrontMatter: '''
 @Renderer(#renderFoo, Context<Foo>())
 @Renderer(#renderBar, Context<Bar>())
 library foo;
 import 'package:mustachio/annotations.dart';
 ''');
-      var rendererAsset = AssetId.parse('foo|lib/foo.renderers.dart');
+      var rendererAsset = AssetId('foo', 'lib/foo.renderers.dart');
       generatedContent = utf8.decode(writer.assets[rendererAsset]);
     });
 
     test('with a corresponding public API function', () async {
       expect(generatedContent,
-          contains('String renderFoo<T>(Foo<T> context, File file)'));
+          contains('String renderFoo<T>(Foo<T> context, Template template)'));
     });
 
     test('with a corresponding render function', () async {
       expect(
           generatedContent,
-          contains(
-              'String _render_Foo<T>(Foo<T> context, List<MustachioNode> ast, File file,'));
+          contains('String _render_Foo<T>(\n'
+              '    Foo<T> context, List<MustachioNode> ast, Template template,'));
     });
 
     test('with a generic supertype type argument', () async {
@@ -275,6 +285,7 @@ import 'package:mustachio/annotations.dart';
     await testMustachioBuilder('''
 class Foo<T extends num> {}
 class Bar {}
+class Baz {}
 ''');
     var renderersLibrary = await resolveGeneratedLibrary(writer);
 
@@ -295,13 +306,14 @@ class Bar {}
     setUpAll(() async {
       writer = InMemoryAssetWriter();
       await testMustachioBuilder('''
-class Foo {
+abstract class Foo<T> {
   static Static get static1 => Bar();
   Private get _private1 => Bar();
   void set setter1(Setter s);
   Method method1(Method m);
 }
 class Bar {}
+class Baz {}
 class Static {}
 class Private {}
 class Setter {}

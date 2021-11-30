@@ -17,7 +17,7 @@ const _details = r'''
 This is usually a typo or changed value of constant.
 
 **GOOD:**
-```
+```dart
 const int A = 1;
 switch (v) {
   case A:
@@ -26,7 +26,7 @@ switch (v) {
 ```
 
 **BAD:**
-```
+```dart
 const int A = 1;
 switch (v) {
   case 1:
@@ -57,9 +57,7 @@ class NoDuplicateCaseValues extends LintRule implements NodeLintRule {
   }
 
   void reportLintWithDescription(AstNode node, String description) {
-    if (node != null) {
-      reporter.reportErrorForNode(_LintCode(name, description), node, []);
-    }
+    reporter.reportErrorForNode(_LintCode(name, description), node, []);
   }
 }
 

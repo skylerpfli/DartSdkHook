@@ -20,7 +20,7 @@ implementation files in `lib/src`, adding elements explicitly exported with an
 `export` directive.
 
 For example, given `lib/foo.dart`:
-```
+```dart
 export 'src/bar.dart' show Bar;
 export 'src/baz.dart';
 
@@ -37,7 +37,7 @@ its API includes:
 All public API members should be documented with `///` doc-style comments.
 
 **GOOD:**
-```
+```dart
 /// A Foo.
 abstract class Foo {
   /// Start foo-ing.
@@ -48,7 +48,7 @@ abstract class Foo {
 ```
 
 **BAD:**
-```
+```dart
 class Bar {
   void bar();
 }
@@ -60,7 +60,7 @@ Advice for writing good doc comments can be found in the
 ''';
 
 class PackageApiDocs extends LintRule implements ProjectVisitor, NodeLintRule {
-  DartProject project;
+  DartProject? project;
 
   PackageApiDocs()
       : super(
@@ -94,19 +94,20 @@ class PackageApiDocs extends LintRule implements ProjectVisitor, NodeLintRule {
 }
 
 class _Visitor extends GeneralizingAstVisitor {
-  PackageApiDocs rule;
+  final PackageApiDocs rule;
 
   _Visitor(this.rule);
-
-  DartProject get project => rule.project;
 
   void check(Declaration node) {
     // If no project info is set, bail early.
     // https://github.com/dart-lang/linter/issues/154
-    if (project == null) {
+    var currentProject = rule.project;
+    if (currentProject == null) {
       return;
     }
-    if (project.isApi(node.declaredElement)) {
+
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null && currentProject.isApi(declaredElement)) {
       if (node.documentationComment == null) {
         rule.reportLint(getNodeToAnnotate(node));
       }

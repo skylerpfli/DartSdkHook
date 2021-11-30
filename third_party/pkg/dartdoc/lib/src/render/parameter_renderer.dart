@@ -22,7 +22,7 @@ class ParameterRendererHtmlList extends ParameterRendererHtml {
 /// Render HTML suitable for a single, wrapped line.
 class ParameterRendererHtml extends ParameterRenderer {
   @override
-  String listItem(String listItem) => '${listItem}';
+  String listItem(String listItem) => listItem;
   @override
   String orderedList(String listItems) => listItems;
   @override
@@ -38,7 +38,7 @@ class ParameterRendererHtml extends ParameterRenderer {
 
   @override
   String parameter(String parameter, String htmlId) =>
-      '<span class="parameter" id="${htmlId}">$parameter</span>';
+      '<span class="parameter" id="$htmlId">$parameter</span>';
   @override
   String parameterName(String parameterName) =>
       '<span class="parameter-name">$parameterName</span>';
@@ -157,7 +157,10 @@ abstract class ParameterRenderer {
     var paramModelType = param.modelType;
 
     if (showMetadata && param.hasAnnotations) {
-      buf.write(param.annotations.map(annotation).join(' ') + ' ');
+      buf.write(param.annotations
+              .map((a) => annotation(a.linkedNameWithParameters))
+              .join(' ') +
+          ' ');
     }
     if (param.isRequiredNamed) {
       buf.write(required('required') + ' ');
@@ -165,13 +168,12 @@ abstract class ParameterRenderer {
     if (param.isCovariant) {
       buf.write(covariant('covariant') + ' ');
     }
-    if (paramModelType is CallableElementTypeMixin ||
-        paramModelType.type is FunctionType) {
+    if (paramModelType is CallableElementTypeMixin) {
       String returnTypeName;
       if (paramModelType.isTypedef) {
         returnTypeName = paramModelType.linkedName;
       } else {
-        returnTypeName = paramModelType.createLinkedReturnTypeName();
+        returnTypeName = paramModelType.returnType.linkedName;
       }
       buf.write(typeName(returnTypeName));
       if (showNames) {
@@ -182,9 +184,12 @@ abstract class ParameterRenderer {
       }
       if (!paramModelType.isTypedef && paramModelType is DefinedElementType) {
         buf.write('(');
-        buf.write(renderLinkedParams(paramModelType.element.parameters,
-            showMetadata: showMetadata, showNames: showNames));
+        buf.write(renderLinkedParams(
+            (paramModelType as DefinedElementType).element.parameters,
+            showMetadata: showMetadata,
+            showNames: showNames));
         buf.write(')');
+        buf.write(paramModelType.nullabilitySuffix);
       }
       if (!paramModelType.isTypedef && paramModelType.type is FunctionType) {
         buf.write('(');
@@ -193,6 +198,7 @@ abstract class ParameterRenderer {
             showMetadata: showMetadata,
             showNames: showNames));
         buf.write(')');
+        buf.write(paramModelType.nullabilitySuffix);
       }
     } else if (param.modelType != null) {
       var linkedTypeName = paramModelType.linkedName;

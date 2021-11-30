@@ -18,12 +18,12 @@ because the parameter types can almost always be inferred from the context,
 thus making the practice redundant.
 
 **BAD:**
-```
+```dart
 var names = people.map((Person person) => person.name);
 ```
 
 **GOOD:**
-```
+```dart
 var names = people.map((person) => person.name);
 ```
 
@@ -60,8 +60,11 @@ class AvoidTypesOnClosureParametersVisitor extends SimpleAstVisitor {
     if (node.parent is FunctionDeclaration) {
       return;
     }
-    for (final parameter in node.parameters.parameters) {
-      parameter.accept(this);
+    var parameterList = node.parameters?.parameters;
+    if (parameterList != null) {
+      for (final parameter in parameterList) {
+        parameter.accept(this);
+      }
     }
   }
 

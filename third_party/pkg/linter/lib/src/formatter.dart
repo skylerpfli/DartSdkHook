@@ -14,7 +14,7 @@ import 'util/score_utils.dart';
 // Number of times to perform linting to get stable benchmarks.
 const benchmarkRuns = 10;
 
-String getLineContents(int lineNumber, AnalysisError error) {
+String getLineContents(int? lineNumber, AnalysisError error) {
   final path = error.source.fullName;
   final file = File(path);
   String failureDetails;
@@ -22,7 +22,7 @@ String getLineContents(int lineNumber, AnalysisError error) {
     failureDetails = 'file at $path does not exist';
   } else {
     var lines = file.readAsLinesSync();
-    var lineIndex = lineNumber - 1;
+    var lineIndex = lineNumber! - 1;
     if (lines.length > lineIndex) {
       return lines[lineIndex];
     }
@@ -32,9 +32,9 @@ String getLineContents(int lineNumber, AnalysisError error) {
   throw StateError('Unable to get contents for line: $failureDetails');
 }
 
-String pluralize(String word, int count) =>
+String pluralize(String word, int? count) =>
     "$count ${count == 1 ? '$word' : '${word}s'}";
-String shorten(String fileRoot, String fullName) {
+String shorten(String? fileRoot, String fullName) {
   if (fileRoot == null || !fullName.startsWith(fileRoot)) {
     return fullName;
   }
@@ -60,7 +60,7 @@ Future writeBenchmarks(
   final pedanticRuleset = await pedanticRules;
   final stats = timings.keys.map((t) {
     final details = pedanticRuleset.contains(t) ? ' [pedantic]' : '';
-    return _Stat('$t$details', timings[t]);
+    return _Stat('$t$details', timings[t] ?? 0);
   }).toList();
   _writeTimings(out, stats, 0);
 }
@@ -110,10 +110,10 @@ void _writeTimings(IOSink out, List<_Stat> timings, int summaryLength) {
 
 class DetailedReporter extends SimpleFormatter {
   DetailedReporter(
-      Iterable<AnalysisErrorInfo> errors, LintFilter filter, IOSink out,
-      {int fileCount,
-      int elapsedMs,
-      String fileRoot,
+      Iterable<AnalysisErrorInfo> errors, LintFilter? filter, IOSink out,
+      {int? fileCount,
+      int? elapsedMs,
+      String? fileRoot,
       bool showStatistics = false,
       bool machineOutput = false,
       bool quiet = false})
@@ -126,14 +126,14 @@ class DetailedReporter extends SimpleFormatter {
             quiet: quiet);
 
   @override
-  void writeLint(AnalysisError error, {int offset, int line, int column}) {
+  void writeLint(AnalysisError error, {int? offset, int? line, int? column}) {
     super.writeLint(error, offset: offset, column: column, line: line);
 
     if (!machineOutput) {
       var contents = getLineContents(line, error);
       out.writeln(contents);
 
-      var spaces = column - 1;
+      var spaces = column! - 1;
       var arrows = max(1, min(error.length, contents.length - spaces));
 
       var result = '${" " * spaces}${"^" * arrows}';
@@ -144,10 +144,10 @@ class DetailedReporter extends SimpleFormatter {
 
 abstract class ReportFormatter {
   factory ReportFormatter(
-          Iterable<AnalysisErrorInfo> errors, LintFilter filter, IOSink out,
-          {int fileCount,
-          int elapsedMs,
-          String fileRoot,
+          Iterable<AnalysisErrorInfo> errors, LintFilter? filter, IOSink out,
+          {int? fileCount,
+          int? elapsedMs,
+          String? fileRoot,
           bool showStatistics = false,
           bool machineOutput = false,
           bool quiet = false}) =>
@@ -166,14 +166,14 @@ abstract class ReportFormatter {
 class SimpleFormatter implements ReportFormatter {
   final IOSink out;
   final Iterable<AnalysisErrorInfo> errors;
-  final LintFilter filter;
+  final LintFilter? filter;
 
   int errorCount = 0;
   int filteredLintCount = 0;
 
-  final int fileCount;
-  final int elapsedMs;
-  final String fileRoot;
+  final int? fileCount;
+  final int? elapsedMs;
+  final String? fileRoot;
   final bool showStatistics;
   final bool machineOutput;
   final bool quiet;
@@ -237,7 +237,7 @@ class SimpleFormatter implements ReportFormatter {
     out.writeln(line);
   }
 
-  void writeLint(AnalysisError error, {int offset, int line, int column}) {
+  void writeLint(AnalysisError error, {int? offset, int? line, int? column}) {
     if (machineOutput) {
       //INFO|LINT|constant_identifier_names|test/engine_test.dart|91|22|3|Prefer using lowerCamelCase for constant names.
       out
@@ -266,6 +266,7 @@ class SimpleFormatter implements ReportFormatter {
   }
 
   void writeLints() {
+    var filter = this.filter;
     errors.forEach((info) => (info.errors.toList()..sort(compare)).forEach((e) {
           if (filter != null && filter.filter(e)) {
             filteredLintCount++;
@@ -299,7 +300,7 @@ class SimpleFormatter implements ReportFormatter {
   void writeTimings() {
     final timers = lintRegistry.timers;
     final timings = timers.keys
-        .map((t) => _Stat(t, timers[t].elapsedMilliseconds))
+        .map((t) => _Stat(t, timers[t]?.elapsedMilliseconds ?? 0))
         .toList();
     _writeTimings(out, timings, _summaryLength);
   }
@@ -307,7 +308,7 @@ class SimpleFormatter implements ReportFormatter {
   void _recordStats(AnalysisError error) {
     var codeName = error.errorCode.name;
     stats.putIfAbsent(codeName, () => 0);
-    stats[codeName]++;
+    stats[codeName] = stats[codeName]! + 1;
   }
 
   void _writeLint(AnalysisError error, LineInfo lineInfo) {

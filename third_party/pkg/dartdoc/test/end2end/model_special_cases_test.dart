@@ -32,7 +32,7 @@ Future<PackageGraph> get _testPackageGraphExperiments =>
             PhysicalPackageConfigProvider(),
             additionalArguments: [
               '--enable-experiment',
-              'non-nullable',
+              'non-nullable,nonfunction-type-aliases',
               '--no-link-to-remote'
             ]));
 
@@ -74,184 +74,194 @@ void main() {
     exit(1);
   }
 
-  // This doesn't have the `max` because Null safety is supposed to work after
-  // this version, and if the `max` is placed here we'll silently pass 2.10
-  // stable if we haven't figured out how to switch on Null safety outside of
-  // dev builds as specified in #2148.
-  final _nullSafetyExperimentAllowed =
-      VersionRange(min: Version.parse('2.9.0-9.0.dev'), includeMin: true);
+  final _generalizedTypedefsAllowed =
+      VersionRange(min: Version.parse('2.13.0-0'), includeMin: true);
+  final _genericMetadataAllowed =
+      VersionRange(min: Version.parse('2.13.0-0'), includeMin: true);
+  final _tripleShiftAllowed =
+      VersionRange(min: Version.parse('2.13.0-0'), includeMin: true);
 
   // Experimental features not yet enabled by default.  Move tests out of this
   // block when the feature is enabled by default.
   group('Experiments', () {
-    Library lateFinalWithoutInitializer,
-        nullSafetyClassMemberDeclarations,
-        optOutOfNullSafety,
-        nullableElements;
-    Class b;
+    group('triple-shift', () {
+      Library tripleShift;
+      Class C, E, F;
+      Extension ShiftIt;
+      Operator classShift, extensionShift;
+      Field constantTripleShifted;
 
-    setUpAll(() async {
-      lateFinalWithoutInitializer = (await _testPackageGraphExperiments)
-          .libraries
-          .firstWhere((lib) => lib.name == 'late_final_without_initializer');
-      nullSafetyClassMemberDeclarations = (await _testPackageGraphExperiments)
-          .libraries
-          .firstWhere((lib) => lib.name == 'nnbd_class_member_declarations');
-      optOutOfNullSafety = (await _testPackageGraphExperiments)
-          .libraries
-          .firstWhere((lib) => lib.name == 'opt_out_of_nnbd');
-      nullableElements = (await _testPackageGraphExperiments)
-          .libraries
-          .firstWhere((lib) => lib.name == 'nullable_elements');
-      b = nullSafetyClassMemberDeclarations.allClasses
-          .firstWhere((c) => c.name == 'B');
-    });
+      setUpAll(() async {
+        tripleShift = (await _testPackageGraphExperiments)
+            .libraries
+            .firstWhere((l) => l.name == 'triple_shift');
+        C = tripleShift.classes.firstWhere((c) => c.name == 'C');
+        E = tripleShift.classes.firstWhere((c) => c.name == 'E');
+        F = tripleShift.classes.firstWhere((c) => c.name == 'F');
+        ShiftIt = tripleShift.extensions.firstWhere((e) => e.name == 'ShiftIt');
+        classShift =
+            C.instanceOperators.firstWhere((o) => o.name.contains('>>>'));
+        extensionShift =
+            ShiftIt.instanceOperators.firstWhere((o) => o.name.contains('>>>'));
+        constantTripleShifted = C.constantFields
+            .firstWhere((f) => f.name == 'constantTripleShifted');
+      });
 
-    test('isNullSafety is set correctly for libraries', () {
-      expect(lateFinalWithoutInitializer.isNullSafety, isTrue);
-      expect(optOutOfNullSafety.isNullSafety, isFalse);
-    });
+      test('constants with triple shift render correctly', () {
+        expect(constantTripleShifted.constantValue, equals('3 &gt;&gt;&gt; 5'));
+      });
 
-    test('method parameters with required', () {
-      var m1 = b.instanceMethods.firstWhere((m) => m.name == 'm1');
-      var p1 = m1.allParameters.firstWhere((p) => p.name == 'p1');
-      var p2 = m1.allParameters.firstWhere((p) => p.name == 'p2');
-      expect(p1.isRequiredNamed, isTrue);
-      expect(p2.isRequiredNamed, isFalse);
-      expect(p2.isNamed, isTrue);
+      test('operators exist and are named correctly', () {
+        expect(classShift.name, equals('operator >>>'));
+        expect(extensionShift.name, equals('operator >>>'));
+      });
 
-      expect(
-          m1.linkedParamsLines,
-          equals(
-              '<ol class="parameter-list"><li><span class="parameter" id="m1-param-some"><span class="type-annotation">int</span> <span class="parameter-name">some</span>, </span></li>\n'
-              '<li><span class="parameter" id="m1-param-regular"><span class="type-annotation">dynamic</span> <span class="parameter-name">regular</span>, </span></li>\n'
-              '<li><span class="parameter" id="m1-param-parameters"><span>covariant</span> <span class="type-annotation">dynamic</span> <span class="parameter-name">parameters</span>, </span></li>\n'
-              '<li><span class="parameter" id="m1-param-p1">{<span>required</span> <span class="type-annotation">dynamic</span> <span class="parameter-name">p1</span>, </span></li>\n'
-              '<li><span class="parameter" id="m1-param-p2"><span class="type-annotation">int</span> <span class="parameter-name">p2</span> = <span class="default-value">3</span>, </span></li>\n'
-              '<li><span class="parameter" id="m1-param-p3"><span>required</span> <span>covariant</span> <span class="type-annotation">dynamic</span> <span class="parameter-name">p3</span>, </span></li>\n'
-              '<li><span class="parameter" id="m1-param-p4"><span>required</span> <span>covariant</span> <span class="type-annotation">int</span> <span class="parameter-name">p4</span>}</span></li>\n'
-              '</ol>'));
-    });
+      test(
+          'inheritance and overriding of triple shift operators works correctly',
+          () {
+        var tripleShiftE =
+            E.instanceOperators.firstWhere((o) => o.name.contains('>>>'));
+        var tripleShiftF =
+            F.instanceOperators.firstWhere((o) => o.name.contains('>>>'));
 
-    test('verify no regression on ordinary optionals', () {
-      var m2 = b.instanceMethods.firstWhere((m) => m.name == 'm2');
-      var sometimes = m2.allParameters.firstWhere((p) => p.name == 'sometimes');
-      var optionals = m2.allParameters.firstWhere((p) => p.name == 'optionals');
-      expect(sometimes.isRequiredNamed, isFalse);
-      expect(sometimes.isRequiredPositional, isTrue);
-      expect(sometimes.isOptionalPositional, isFalse);
-      expect(optionals.isRequiredNamed, isFalse);
-      expect(optionals.isRequiredPositional, isFalse);
-      expect(optionals.isOptionalPositional, isTrue);
+        expect(tripleShiftE.isInherited, isTrue);
+        expect(tripleShiftE.canonicalModelElement, equals(classShift));
+        expect(tripleShiftE.modelType.returnType.name, equals('C'));
+        expect(tripleShiftF.isInherited, isFalse);
+        expect(tripleShiftF.modelType.returnType.name, equals('F'));
+      });
+    }, skip: !_tripleShiftAllowed.allows(_platformVersion));
 
-      expect(
-          m2.linkedParamsLines,
-          equals(
-              '<ol class="parameter-list"><li><span class="parameter" id="m2-param-sometimes"><span class="type-annotation">int</span> <span class="parameter-name">sometimes</span>, </span></li>\n'
-              '<li><span class="parameter" id="m2-param-we"><span class="type-annotation">dynamic</span> <span class="parameter-name">we</span>, </span></li>\n'
-              '<li><span class="parameter" id="m2-param-have">[<span class="type-annotation">String</span> <span class="parameter-name">have</span>, </span></li>\n'
-              '<li><span class="parameter" id="m2-param-optionals"><span class="type-annotation">double</span> <span class="parameter-name">optionals</span>]</span></li>\n'
-              '</ol>'));
-    });
+    group('generic metadata', () {
+      Library genericMetadata;
+      TopLevelVariable f;
+      Class C;
+      Method mp, mn;
 
-    test('Late final class member test', () {
-      var c = lateFinalWithoutInitializer.allClasses
-          .firstWhere((c) => c.name == 'C');
-      var a = c.instanceFields.firstWhere((f) => f.name == 'a');
-      var b = c.instanceFields.firstWhere((f) => f.name == 'b');
-      var cField = c.instanceFields.firstWhere((f) => f.name == 'cField');
-      var dField = c.instanceFields.firstWhere((f) => f.name == 'dField');
+      setUpAll(() async {
+        genericMetadata = (await _testPackageGraphExperiments)
+            .libraries
+            .firstWhere((l) => l.name == 'generic_metadata');
+        f = genericMetadata.properties.firstWhere((p) => p.name == 'f');
+        C = genericMetadata.classes.firstWhere((c) => c.name == 'C');
+        mp = C.instanceMethods.firstWhere((m) => m.name == 'mp');
+        mn = C.instanceMethods.firstWhere((m) => m.name == 'mn');
+      });
 
-      // If Null safety isn't enabled, fields named 'late' come back from the
-      // analyzer instead of setting up 'isLate'.
-      expect(c.instanceFields.any((f) => f.name == 'late'), isFalse);
+      test('Verify type arguments on annotations renders, including parameters',
+          () {
+        var ab0 =
+            '@<a href="%%__HTMLBASE_dartdoc_internal__%%generic_metadata/A-class.html">A</a><span class="signature">&lt;<wbr><span class="type-parameter"><a href="%%__HTMLBASE_dartdoc_internal__%%generic_metadata/B.html">B</a></span>&gt;</span>(0)';
 
-      expect(a.modelType.returnType.name, equals('dynamic'));
-      expect(a.isLate, isTrue);
-      expect(a.features, contains('late'));
+        expect(genericMetadata.annotations.first.linkedNameWithParameters,
+            equals(ab0));
+        expect(f.annotations.first.linkedNameWithParameters, equals(ab0));
+        expect(C.annotations.first.linkedNameWithParameters, equals(ab0));
+        expect(
+            C.typeParameters.first.annotations.first.linkedNameWithParameters,
+            equals(ab0));
+        expect(
+            mp.parameters
+                .map((p) => p.annotations.first.linkedNameWithParameters),
+            everyElement(equals(ab0)));
+        expect(
+            mn.parameters
+                .map((p) => p.annotations.first.linkedNameWithParameters),
+            everyElement(equals(ab0)));
 
-      expect(b.modelType.returnType.name, equals('int'));
-      expect(b.isLate, isTrue);
-      expect(b.features, contains('late'));
+        expect(genericMetadata.features.map((f) => f.linkedNameWithParameters),
+            contains(ab0));
+        expect(
+            f.features.map((f) => f.linkedNameWithParameters), contains(ab0));
+        expect(
+            C.features.map((f) => f.linkedNameWithParameters), contains(ab0));
+        expect(
+            C.typeParameters.first.features
+                .map((f) => f.linkedNameWithParameters),
+            contains(ab0));
+        expect(
+            mp.parameters
+                .map((p) => p.features.map((f) => f.linkedNameWithParameters)),
+            everyElement(contains(ab0)));
+        expect(
+            mn.parameters
+                .map((p) => p.features.map((f) => f.linkedNameWithParameters)),
+            everyElement(contains(ab0)));
+      });
+    }, skip: !_genericMetadataAllowed.allows(_platformVersion));
 
-      expect(cField.modelType.returnType.name, equals('dynamic'));
-      expect(cField.isLate, isTrue);
-      expect(cField.features, contains('late'));
+    group('generalized typedefs', () {
+      Library generalizedTypedefs;
+      Typedef T0, T1, T2, T3, T4, T5, T6, T7;
+      Class C, C2;
 
-      expect(dField.modelType.returnType.name, equals('double'));
-      expect(dField.isLate, isTrue);
-      expect(dField.features, contains('late'));
-    });
+      setUpAll(() async {
+        generalizedTypedefs = (await _testPackageGraphExperiments)
+            .libraries
+            .firstWhere((l) => l.name == 'generalized_typedefs');
+        T0 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T0');
+        T1 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T1');
+        T2 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T2');
+        T3 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T3');
+        T4 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T4');
+        T5 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T5');
+        T6 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T6');
+        T7 = generalizedTypedefs.typedefs.firstWhere((a) => a.name == 'T7');
+        C = generalizedTypedefs.classes.firstWhere((c) => c.name == 'C');
+        C2 = generalizedTypedefs.classes.firstWhere((c) => c.name == 'C2');
+      });
 
-    test('Late final top level variables', () {
-      var initializeMe = lateFinalWithoutInitializer.publicProperties
-          .firstWhere((v) => v.name == 'initializeMe');
-      expect(initializeMe.modelType.returnType.name, equals('String'));
-      expect(initializeMe.isLate, isTrue);
-      expect(initializeMe.features, contains('late'));
-    });
+      void expectTypedefs(Typedef t, String modelTypeToString,
+          Iterable<String> genericParameters) {
+        expect(t.modelType.toString(), equals(modelTypeToString));
+        expect(t.genericTypeParameters.map((p) => p.toString()),
+            orderedEquals(genericParameters));
+      }
 
-    test('Opt out of Null safety', () {
-      var notOptedIn = optOutOfNullSafety.publicProperties
-          .firstWhere((v) => v.name == 'notOptedIn');
-      expect(notOptedIn.isNullSafety, isFalse);
-      expect(notOptedIn.modelType.nullabilitySuffix, isEmpty);
-    });
+      void expectAliasedTypeName(AliasedElementType n, expected) {
+        expect(n.aliasElement.name, expected);
+      }
 
-    test('complex nullable elements are detected and rendered correctly', () {
-      var complexNullableMembers = nullableElements.allClasses
-          .firstWhere((c) => c.name == 'ComplexNullableMembers');
-      var aComplexType = complexNullableMembers.allFields
-          .firstWhere((f) => f.name == 'aComplexType');
-      var aComplexSetterOnlyType = complexNullableMembers.allFields
-          .firstWhere((f) => f.name == 'aComplexSetterOnlyType');
-      expect(complexNullableMembers.isNullSafety, isTrue);
-      expect(
-          complexNullableMembers.nameWithGenerics,
-          equals(
-              'ComplexNullableMembers&lt;<wbr><span class=\"type-parameter\">T extends String?</span>&gt;'));
-      expect(
-          aComplexType.linkedReturnType,
-          equals(
-              'Map<span class="signature">&lt;<wbr><span class="type-parameter">T?</span>, <span class="type-parameter">String?</span>&gt;</span>'));
-      expect(aComplexSetterOnlyType.linkedReturnType, equals(
-          // TODO(jcollins-g): fix wrong span class for setter-only return type (#2226)
-          '<span class="parameter" id="aComplexSetterOnlyType=-param-value"><span class="type-annotation">List<span class="signature">&lt;<wbr><span class="type-parameter">Map<span class="signature">&lt;<wbr><span class="type-parameter">T?</span>, <span class="type-parameter">String?</span>&gt;</span>?</span>&gt;</span></span></span>'));
-    });
+      test('typedef references display aliases', () {
+        var g = C.instanceMethods.firstWhere((m) => m.name == 'g');
 
-    test('simple nullable elements are detected and rendered correctly', () {
-      var nullableMembers = nullableElements.allClasses
-          .firstWhere((c) => c.name == 'NullableMembers');
-      var initialized =
-          nullableMembers.allFields.firstWhere((f) => f.name == 'initialized');
-      var nullableField = nullableMembers.allFields
-          .firstWhere((f) => f.name == 'nullableField');
-      var methodWithNullables = nullableMembers.publicInstanceMethods
-          .firstWhere((f) => f.name == 'methodWithNullables');
-      var operatorStar = nullableMembers.publicInstanceOperators
-          .firstWhere((f) => f.name == 'operator *');
-      expect(nullableMembers.isNullSafety, isTrue);
-      expect(
-          nullableField.linkedReturnType,
-          equals(
-              'Iterable<span class=\"signature\">&lt;<wbr><span class=\"type-parameter\">BigInt</span>&gt;</span>?'));
-      expect(
-          methodWithNullables.linkedParams,
-          equals(
-              '<span class="parameter" id="methodWithNullables-param-foo"><span class="type-annotation">String?</span> <span class="parameter-name">foo</span></span>'));
-      expect(methodWithNullables.linkedReturnType, equals('int?'));
-      expect(
-          initialized.linkedReturnType,
-          equals(
-              'Map<span class="signature">&lt;<wbr><span class="type-parameter">String</span>, <span class="type-parameter">Map</span>&gt;</span>?'));
-      expect(
-          operatorStar.linkedParams,
-          equals(
-              '<span class="parameter" id="*-param-nullableOther"><span class="type-annotation"><a href="%%__HTMLBASE_dartdoc_internal__%%nullable_elements/NullableMembers-class.html">NullableMembers</a>?</span> <span class="parameter-name">nullableOther</span></span>'));
-    });
-  },
-      skip: (!_nullSafetyExperimentAllowed.allows(_platformVersion) &&
-          !_platformVersionString.contains('edge')));
+        var c = C2.allFields.firstWhere((f) => f.name == 'c');
+        var d = C2.instanceMethods.firstWhere((f) => f.name == 'd');
+
+        expectAliasedTypeName(c.modelType, equals('T1'));
+        expectAliasedTypeName(d.modelType.returnType, equals('T2'));
+        expectAliasedTypeName(d.parameters.first.modelType, equals('T3'));
+        expectAliasedTypeName(d.parameters.last.modelType, equals('T4'));
+
+        expectAliasedTypeName(g.modelType.returnType, equals('T1'));
+        expectAliasedTypeName(
+            g.modelType.parameters.first.modelType, equals('T2'));
+        expectAliasedTypeName(
+            g.modelType.parameters.last.modelType, equals('T3'));
+      });
+
+      test('typedef references to special types work', () {
+        var a = generalizedTypedefs.properties.firstWhere((p) => p.name == 'a');
+        var b = C2.allFields.firstWhere((f) => f.name == 'b');
+        var f = C.allFields.firstWhere((f) => f.name == 'f');
+        expectAliasedTypeName(a.modelType, equals('T0'));
+        expectAliasedTypeName(b.modelType, equals('T0'));
+        expectAliasedTypeName(f.modelType, equals('T0'));
+      }, skip: 'dart-lang/sdk#45291');
+
+      test('basic non-function typedefs work', () {
+        expectTypedefs(T0, 'void', []);
+        expectTypedefs(T1, 'Function', []);
+        expectTypedefs(T2, 'List<X>', ['out X']);
+        expectTypedefs(T3, 'Map<X, Y>', ['out X', 'out Y']);
+        expectTypedefs(T4, 'void Function()', []);
+        expectTypedefs(T5, 'X Function(X, {X name})', ['inout X']);
+        expectTypedefs(T6, 'X Function(Y, [Map<Y, Y>])', ['out X', 'in Y']);
+        expectTypedefs(T7, 'X Function(Y, [Map<Y, Y>])',
+            ['out X extends String', 'in Y extends List<X>']);
+      });
+    }, skip: (!_generalizedTypedefsAllowed.allows(_platformVersion)));
+  });
 
   group('HTML Injection when allowed', () {
     Class htmlInjection;
@@ -429,9 +439,9 @@ void main() {
     test('Verify Interceptor is hidden from inheritance in docs', () {
       var htmlLibrary =
           sdkAsPackageGraph.libraries.singleWhere((l) => l.name == 'dart:html');
-      var EventTarget =
+      var eventTarget =
           htmlLibrary.allClasses.singleWhere((c) => c.name == 'EventTarget');
-      var hashCode = EventTarget.publicInstanceFields
+      var hashCode = eventTarget.publicInstanceFields
           .singleWhere((f) => f.name == 'hashCode');
       var objectModelElement =
           sdkAsPackageGraph.specialClasses[SpecialClass.object];
@@ -442,10 +452,10 @@ void main() {
       // If EventTarget really does start implementing hashCode, this will
       // fail.
       expect(hashCode.href,
-          equals('${HTMLBASE_PLACEHOLDER}dart-core/Object/hashCode.html'));
+          equals('${htmlBasePlaceholder}dart-core/Object/hashCode.html'));
       expect(hashCode.canonicalEnclosingContainer, equals(objectModelElement));
       expect(
-          EventTarget.publicSuperChainReversed
+          eventTarget.publicSuperChainReversed
               .any((et) => et.name == 'Interceptor'),
           isFalse);
     });

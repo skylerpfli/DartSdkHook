@@ -18,13 +18,13 @@ const _details = r'''
 **DO** use a setter for operations that conceptually change a property.
 
 **BAD:**
-```
+```dart
 rectangle.setWidth(3);
 button.setVisible(false);
 ```
 
 **GOOD:**
-```
+```dart
 rectangle.width = 3;
 button.visible = false;
 ```
@@ -57,7 +57,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (node.isSetter ||
         node.isGetter ||
         DartTypeUtilities.overridesMethod(node) ||
-        node.parameters?.parameters?.length != 1 ||
+        node.parameters?.parameters.length != 1 ||
         node.returnType?.type?.isVoid != true) {
       return;
     }
@@ -69,7 +69,7 @@ class _Visitor extends SimpleAstVisitor<void> {
         final rightOperand =
             DartTypeUtilities.getCanonicalElementFromIdentifier(
                 expression.rightHandSide);
-        final parameterElement = node.declaredElement.parameters.first;
+        final parameterElement = node.declaredElement?.parameters.first;
         if (rightOperand == parameterElement && leftOperand is FieldElement) {
           rule.reportLint(node);
         }

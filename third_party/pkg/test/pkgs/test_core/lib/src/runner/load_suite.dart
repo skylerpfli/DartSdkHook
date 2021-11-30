@@ -14,11 +14,10 @@ import 'package:test_api/src/backend/suite.dart'; // ignore: implementation_impo
 import 'package:test_api/src/backend/suite_platform.dart'; // ignore: implementation_imports
 import 'package:test_api/src/backend/test.dart'; // ignore: implementation_imports
 import 'package:test_api/src/utils.dart'; // ignore: implementation_imports
+// ignore: deprecated_member_use
+import 'package:test_api/test_api.dart' show Timeout;
 
-import '../../test_core.dart';
-import '../util/io_stub.dart'
-    // ignore: uri_does_not_exist
-    if (dart.library.io) '../util/io.dart';
+import '../util/io_stub.dart' if (dart.library.io) '../util/io.dart';
 import 'load_exception.dart';
 import 'plugin/environment.dart';
 import 'runner_suite.dart';
@@ -76,7 +75,7 @@ class LoadSuite extends Suite implements RunnerSuite {
   ///
   /// Load suites are guaranteed to only contain one test. This is a utility
   /// method for accessing it directly.
-  Test get test => this.group.entries.single as Test;
+  Test get test => group.entries.single as Test;
 
   /// Creates a load suite named [name] on [platform].
   ///
@@ -89,7 +88,7 @@ class LoadSuite extends Suite implements RunnerSuite {
   factory LoadSuite(String name, SuiteConfiguration config,
       SuitePlatform platform, FutureOr<RunnerSuite?> Function() body,
       {String? path}) {
-    var completer = Completer<Pair<RunnerSuite, Zone>>.sync();
+    var completer = Completer<Pair<RunnerSuite, Zone>?>.sync();
     return LoadSuite._(name, config, platform, () {
       var invoker = Invoker.current;
       invoker!.addOutstandingCallback();
@@ -168,7 +167,7 @@ class LoadSuite extends Suite implements RunnerSuite {
   /// If [suite] completes to `null`, [change] won't be run. [change] is run
   /// within the load test's zone, so any errors or prints it emits will be
   /// associated with that test.
-  LoadSuite changeSuite(RunnerSuite Function(RunnerSuite) change) {
+  LoadSuite changeSuite(RunnerSuite? Function(RunnerSuite) change) {
     return LoadSuite._changeSuite(this, _suiteAndZone.then((pair) {
       if (pair == null) return null;
 
@@ -199,7 +198,7 @@ class LoadSuite extends Suite implements RunnerSuite {
 
   @override
   LoadSuite filter(bool Function(Test) callback) {
-    var filtered = this.group.filter(callback);
+    var filtered = group.filter(callback);
     filtered ??= Group.root([], metadata: metadata);
     return LoadSuite._filtered(this, filtered);
   }

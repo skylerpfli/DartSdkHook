@@ -18,14 +18,14 @@ const _details = r'''
 reference.
 
 **BAD:**
-```
+```dart
 SomeClass someReference = SomeClass();
 someReference.firstMethod();
 someReference.secondMethod();
 ```
 
 **BAD:**
-```
+```dart
 SomeClass someReference = SomeClass();
 ...
 someReference.firstMethod();
@@ -34,7 +34,7 @@ someReference.secondMethod();
 ```
 
 **GOOD:**
-```
+```dart
 SomeClass someReference = SomeClass()
     ..firstMethod()
     ..aProperty = value
@@ -42,7 +42,7 @@ SomeClass someReference = SomeClass()
 ```
 
 **GOOD:**
-```
+```dart
 SomeClass someReference = SomeClass();
 ...
 someReference
@@ -53,7 +53,7 @@ someReference
 
 ''';
 
-Element _getElementFromVariableDeclarationStatement(
+Element? _getElementFromVariableDeclarationStatement(
     VariableDeclarationStatement statement) {
   final variables = statement.variables.variables;
   if (variables.length == 1) {
@@ -71,7 +71,7 @@ Element _getElementFromVariableDeclarationStatement(
   return null;
 }
 
-ExecutableElement _getExecutableElementFromMethodInvocation(
+ExecutableElement? _getExecutableElementFromMethodInvocation(
     MethodInvocation node) {
   if (_isInvokedWithoutNullAwareOperator(node.operator)) {
     final executableElement =
@@ -83,7 +83,7 @@ ExecutableElement _getExecutableElementFromMethodInvocation(
   return null;
 }
 
-Element _getPrefixElementFromExpression(Expression rawExpression) {
+Element? _getPrefixElementFromExpression(Expression rawExpression) {
   final expression = rawExpression.unParenthesized;
   if (expression is PrefixedIdentifier) {
     return DartTypeUtilities.getCanonicalElementFromIdentifier(
@@ -97,13 +97,13 @@ Element _getPrefixElementFromExpression(Expression rawExpression) {
   return null;
 }
 
-Element _getTargetElementFromCascadeExpression(CascadeExpression node) =>
+Element? _getTargetElementFromCascadeExpression(CascadeExpression node) =>
     DartTypeUtilities.getCanonicalElementFromIdentifier(node.target);
 
-Element _getTargetElementFromMethodInvocation(MethodInvocation node) =>
+Element? _getTargetElementFromMethodInvocation(MethodInvocation node) =>
     DartTypeUtilities.getCanonicalElementFromIdentifier(node.target);
 
-bool _isInvokedWithoutNullAwareOperator(Token token) =>
+bool _isInvokedWithoutNullAwareOperator(Token? token) =>
     token?.type == TokenType.PERIOD;
 
 /// Rule to lint consecutive invocations of methods or getters on the same
@@ -128,9 +128,8 @@ class CascadeInvocations extends LintRule implements NodeLintRule {
 /// A CascadableExpression is an object that is built from an expression and
 /// knows if it is able to join to another CascadableExpression.
 class _CascadableExpression {
-  static final nullCascadableExpression = _CascadableExpression._internal(
-      null, [],
-      canJoin: false, canReceive: false, canBeCascaded: false);
+  static final nullCascadableExpression =
+      _CascadableExpression._internal(null, []);
 
   /// Whether this expression can be joined with a previous expression via a
   /// cascade operation.
@@ -148,7 +147,7 @@ class _CascadableExpression {
   /// in the right part of an assignment in a following expression that we would
   /// like to join to this.
   final bool isCritical;
-  final Element element;
+  final Element? element;
   final List<AstNode> criticalNodes;
 
   factory _CascadableExpression.fromExpressionStatement(
@@ -177,10 +176,7 @@ class _CascadableExpression {
       VariableDeclarationStatement node) {
     final element = _getElementFromVariableDeclarationStatement(node);
     return _CascadableExpression._internal(element, [],
-        canJoin: false,
-        canReceive: true,
-        canBeCascaded: false,
-        isCritical: true);
+        canReceive: true, isCritical: true);
   }
 
   factory _CascadableExpression._fromAssignmentExpression(
@@ -190,9 +186,7 @@ class _CascadableExpression {
       return _CascadableExpression._internal(
           DartTypeUtilities.getCanonicalElement(leftExpression.staticElement),
           [node.rightHandSide],
-          canJoin: false,
           canReceive: node.operator.type != TokenType.QUESTION_QUESTION_EQ,
-          canBeCascaded: false,
           isCritical: true);
     }
     // setters
@@ -263,9 +257,9 @@ class _CascadableExpression {
   }
 
   _CascadableExpression._internal(this.element, this.criticalNodes,
-      {this.canJoin,
-      this.canReceive,
-      this.canBeCascaded,
+      {this.canJoin = false,
+      this.canReceive = false,
+      this.canBeCascaded = false,
       this.isCritical = false});
 
   /// Whether `this` is compatible to be joined with [expressionBox] with a

@@ -69,7 +69,6 @@ void defineRuleTests() {
       }
     });
     group('format', () {
-      registerLintRules();
       for (final rule in Registry.ruleRegistry.rules) {
         test('`${rule.name}` description', () {
           expect(rule.description.endsWith('.'), isTrue,
@@ -87,20 +86,20 @@ void defineRuleUnitTests() {
       [
         Uri.parse('package:foo/src/bar.dart'),
         Uri.parse('package:foo/src/baz/bar.dart')
-      ]..forEach((uri) {
-          test(uri.toString(), () {
-            expect(isPackage(uri), isTrue);
-          });
+      ].forEach((uri) {
+        test(uri.toString(), () {
+          expect(isPackage(uri), isTrue);
         });
+      });
       [
         Uri.parse('foo/bar.dart'),
         Uri.parse('src/bar.dart'),
         Uri.parse('dart:async')
-      ]..forEach((uri) {
-          test(uri.toString(), () {
-            expect(isPackage(uri), isFalse);
-          });
+      ].forEach((uri) {
+        test(uri.toString(), () {
+          expect(isPackage(uri), isFalse);
         });
+      });
     });
 
     group('samePackage', () {
@@ -122,17 +121,17 @@ void defineRuleUnitTests() {
       [
         Uri.parse('package:foo/src/bar.dart'),
         Uri.parse('package:foo/src/baz/bar.dart')
-      ]..forEach((uri) {
-          test(uri.toString(), () {
-            expect(isImplementation(uri), isTrue);
-          });
+      ].forEach((uri) {
+        test(uri.toString(), () {
+          expect(isImplementation(uri), isTrue);
         });
+      });
       [Uri.parse('package:foo/bar.dart'), Uri.parse('src/bar.dart')]
-        ..forEach((uri) {
-          test(uri.toString(), () {
-            expect(isImplementation(uri), isFalse);
-          });
+          .forEach((uri) {
+        test(uri.toString(), () {
+          expect(isImplementation(uri), isFalse);
         });
+      });
     });
   });
 
@@ -197,7 +196,6 @@ void defineSanityTests() {
   });
 
   test('linter version caching', () {
-    registerLintRules();
     expect(lint_service.linterVersion, version);
   });
 }
@@ -208,19 +206,19 @@ void defineSoloRuleTest(String ruleToTest) {
     if (entry is! File || !isDartFile(entry)) continue;
     var ruleName = p.basenameWithoutExtension(entry.path);
     if (ruleName == ruleToTest) {
-      testRule(ruleName, entry as File);
+      testRule(ruleName, entry);
     }
   }
 }
 
 void testRule(String ruleName, File file,
-    {bool debug = false, String analysisOptions}) {
-  registerLintRules();
-
+    {bool debug = true, String? analysisOptions}) {
   test('$ruleName', () async {
     if (!file.existsSync()) {
       throw Exception('No rule found defined at: ${file.path}');
     }
+
+    registerLintRules(inTestMode: debug);
 
     var expected = <AnnotationMatcher>[];
 
@@ -267,7 +265,7 @@ void testRule(String ruleName, File file,
         Spelunker(file.absolute.path, featureSet: featureSet).spelunk();
         print('');
         // Lints.
-        ResultReporter(lints)..write();
+        ResultReporter(lints).write();
       }
 
       // Rethrow and fail.
@@ -276,7 +274,7 @@ void testRule(String ruleName, File file,
   });
 }
 
-void testRules(String ruleDir, {String analysisOptions}) {
+void testRules(String ruleDir, {String? analysisOptions}) {
   for (var entry in Directory(ruleDir).listSync()) {
     if (entry is! File || !isDartFile(entry)) continue;
     var ruleName = p.basenameWithoutExtension(entry.path);
@@ -284,8 +282,7 @@ void testRules(String ruleDir, {String analysisOptions}) {
       // Disabled pending fix: https://github.com/dart-lang/linter/issues/23
       continue;
     }
-    testRule(ruleName, entry as File,
-        debug: true, analysisOptions: analysisOptions);
+    testRule(ruleName, entry, analysisOptions: analysisOptions);
   }
 }
 

@@ -1,3 +1,30 @@
+# 1.2.1
+
+- fix: adjusted SDK lower bound to 2.12.0-0 (from 2.13.0-0)
+
+# 1.2.0
+
+- improvements to `iterable_contains_unrelated_type` to better support `List`
+  content checks
+- fixes to `camel_case_types` and `prefer_mixin` to support non-function
+  type aliases
+
+# 1.1.0
+
+- fixed `prefer_mixin` to properly make exceptions for `dart.collection` legacy
+  mixins
+- improved formatting of source examples in docs  
+- new lint: `use_build_context_synchronously` (experimental)
+- new lint: `avoid_multiple_declarations_per_line`
+
+# 1.0.0
+
+- full library migration to null-safety
+- new lint: `use_if_null_to_convert_nulls_to_bools`
+- new lint: `deprecated_consistency`
+- new lint: `use_named_constants`
+- deprecation of `avoid_as`
+
 # 0.1.129
 
 - fixed a bug where `avoid_dynamic_calls` produced false-positives for `.call()`

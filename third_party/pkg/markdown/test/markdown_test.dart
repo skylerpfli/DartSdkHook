@@ -2,13 +2,15 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+// @dart=2.9
+
 import 'package:markdown/markdown.dart';
 import 'package:test/test.dart';
 
 import 'util.dart';
 
-void main() {
-  testDirectory('original');
+void main() async {
+  await testDirectory('original');
 
   // Block syntax extensions
   testFile('extensions/fenced_code_blocks.unit',
@@ -25,8 +27,8 @@ void main() {
   testFile('extensions/strikethrough.unit',
       inlineSyntaxes: [StrikethroughSyntax()]);
 
-  testDirectory('common_mark');
-  testDirectory('gfm', extensionSet: ExtensionSet.gitHubFlavored);
+  await testDirectory('common_mark');
+  await testDirectory('gfm', extensionSet: ExtensionSet.gitHubFlavored);
 
   group('Corner cases', () {
     validateCore('Incorrect Links', '''
@@ -125,7 +127,7 @@ nyan''',
 
     validateCore('dart custom links', 'links [are<foo>] awesome',
         '<p>links <a>are&lt;foo></a> awesome</p>\n',
-        linkResolver: (String text, [_]) =>
+        linkResolver: (String text, [String /*?*/ _]) =>
             Element.text('a', text.replaceAll('<', '&lt;')));
 
     // TODO(amouravski): need more tests here for custom syntaxes, as some

@@ -17,7 +17,7 @@ Using control flow in finally blocks will inevitably cause unexpected behavior
 that is hard to debug.
 
 **GOOD:**
-```
+```dart
 class Ok {
   double compliantMethod() {
     var i = 5;
@@ -32,7 +32,7 @@ class Ok {
 ```
 
 **BAD:**
-```
+```dart
 class BadReturn {
   double nonCompliantMethod() {
     try {
@@ -47,7 +47,7 @@ class BadReturn {
 ```
 
 **BAD:**
-```
+```dart
 class BadContinue {
   double nonCompliantMethod() {
     for (var o in [1, 2]) {
@@ -65,7 +65,7 @@ class BadContinue {
 ```
 
 **BAD:**
-```
+```dart
 class BadBreak {
   double nonCompliantMethod() {
     for (var o in [1, 2]) {
@@ -109,7 +109,7 @@ class ControlFlowInFinally extends LintRule implements NodeLintRule {
 abstract class ControlFlowInFinallyBlockReporterMixin {
   LintRule get rule;
 
-  void reportIfFinallyAncestorExists(AstNode node, {AstNode ancestor}) {
+  void reportIfFinallyAncestorExists(AstNode node, {AstNode? ancestor}) {
     final tryStatement = node.thisOrAncestorOfType<TryStatement>();
     final finallyBlock = tryStatement?.finallyBlock;
     bool finallyBlockAncestorPredicate(AstNode n) => n == finallyBlock;
@@ -126,12 +126,12 @@ abstract class ControlFlowInFinallyBlockReporterMixin {
     }
   }
 
-  AstNode _findEnablerNode(
-      AstNode ancestor,
+  AstNode? _findEnablerNode(
+      AstNode? ancestor,
       bool Function(AstNode n) finallyBlockAncestorPredicate,
       AstNode node,
       TryStatement tryStatement) {
-    AstNode enablerNode;
+    AstNode? enablerNode;
     if (ancestor == null) {
       bool functionBlockPredicate(n) =>
           n is FunctionBody &&

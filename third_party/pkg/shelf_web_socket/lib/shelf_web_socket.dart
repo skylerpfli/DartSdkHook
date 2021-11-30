@@ -7,8 +7,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'src/web_socket_handler.dart';
 
-typedef _BinaryFunction = void Function(Null, Null);
-
 /// Creates a Shelf handler that upgrades HTTP requests to WebSocket
 /// connections.
 ///
@@ -25,8 +23,8 @@ typedef _BinaryFunction = void Function(Null, Null);
 /// argument. The subprotocol is determined by looking at the client's
 /// `Sec-WebSocket-Protocol` header and selecting the first entry that also
 /// appears in [protocols]. If no subprotocols are shared between the client and
-/// the server, `null` will be passed instead. Note that if [onConnection] takes
-/// two arguments, [protocols] must be passed.
+/// the server, `null` will be passed instead and no subprotocol heaader will be
+/// sent to the client which may cause it to disconnect.
 ///
 /// [WebSocket subprotocol]: https://tools.ietf.org/html/rfc6455#section-1.9
 ///
@@ -42,23 +40,18 @@ typedef _BinaryFunction = void Function(Null, Null);
 /// channel instance, enabling round-trip disconnect detection.
 /// See [WebSocketChannel] for more details.
 Handler webSocketHandler(Function onConnection,
-    {Iterable<String> protocols,
-    Iterable<String> allowedOrigins,
-    Duration pingInterval}) {
-  if (onConnection is! _BinaryFunction) {
-    if (protocols != null) {
-      throw ArgumentError('If protocols is non-null, onConnection must '
-          'take two arguments, the WebSocket and the protocol.');
-    }
-
-    var innerOnConnection = onConnection;
+    {Iterable<String>? protocols,
+    Iterable<String>? allowedOrigins,
+    Duration? pingInterval}) {
+  if (onConnection is! void Function(Null, Null)) {
+    final innerOnConnection = onConnection;
     onConnection = (webSocket, _) => innerOnConnection(webSocket);
   }
 
   return WebSocketHandler(
     onConnection,
     protocols?.toSet(),
-    allowedOrigins?.map((origin) => origin.toLowerCase())?.toSet(),
+    allowedOrigins?.map((origin) => origin.toLowerCase()).toSet(),
     pingInterval,
   ).handle;
 }

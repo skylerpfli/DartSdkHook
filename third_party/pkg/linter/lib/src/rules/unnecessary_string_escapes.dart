@@ -5,7 +5,6 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
-import 'package:meta/meta.dart';
 
 import '../analyzer.dart';
 
@@ -16,13 +15,13 @@ const _details = r'''
 Remove unnecessary backslashes in strings.
 
 **BAD:**
-```
+```dart
 'this string contains 2 \"double quotes\" ';
 "this string contains 2 \'single quotes\' ";
 ```
 
 **GOOD:**
-```
+```dart
 'this string contains 2 "double quotes" ';
 "this string contains 2 'single quotes' ";
 ```
@@ -79,10 +78,10 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   void visitLexeme(
     Token token, {
-    @required bool isSingleQuoted,
-    @required bool isMultiline,
-    @required int contentsOffset,
-    @required int contentsEnd,
+    required bool isSingleQuoted,
+    required bool isMultiline,
+    required int contentsOffset,
+    required int contentsEnd,
   }) {
     // For multiline string we keep the list on pending quotes.
     // Starting from 3 consecutive quotes, we allow escaping.

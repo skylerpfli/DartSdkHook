@@ -19,7 +19,7 @@ Const declarations are more hot-reload friendly and allow to use const
 constructors if an instantiation references this declaration.
 
 **GOOD:**
-```
+```dart
 const o = <int>[];
 
 class A {
@@ -28,7 +28,7 @@ class A {
 ```
 
 **BAD:**
-```
+```dart
 final o = const <int>[];
 
 class A {
@@ -84,7 +84,7 @@ class _Visitor extends SimpleAstVisitor<void> {
       var initializer = declaration.initializer;
       return initializer != null &&
           (initializer is! TypedLiteral ||
-              (initializer.beginToken?.keyword == Keyword.CONST)) &&
+              (initializer.beginToken.keyword == Keyword.CONST)) &&
           !hasConstantError(context, initializer);
     })) {
       rule.reportLint(node);

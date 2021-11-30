@@ -9,11 +9,11 @@ import 'package:async/async.dart';
 import 'package:crypto/crypto.dart';
 import 'package:stream_channel/stream_channel.dart';
 
-import 'copy/web_socket_impl.dart';
-
 import '_connect_api.dart'
     if (dart.library.io) '_connect_io.dart'
     if (dart.library.html) '_connect_html.dart' as platform;
+import 'copy/web_socket_impl.dart';
+import 'exception.dart';
 
 /// A [StreamChannel] that communicates over a WebSocket.
 ///
@@ -35,21 +35,21 @@ class WebSocketChannel extends StreamChannelMixin {
   /// For a client socket, this is initially `null`. After the WebSocket
   /// connection is established the value is set to the subprotocol selected by
   /// the server. If no subprotocol is negotiated the value will remain `null`.
-  String get protocol => _webSocket.protocol;
+  String? get protocol => _webSocket.protocol;
 
   /// The [close code][] set when the WebSocket connection is closed.
   ///
   /// [close code]: https://tools.ietf.org/html/rfc6455#section-7.1.5
   ///
   /// Before the connection has been closed, this will be `null`.
-  int get closeCode => _webSocket.closeCode;
+  int? get closeCode => _webSocket.closeCode;
 
   /// The [close reason][] set when the WebSocket connection is closed.
   ///
   /// [close reason]: https://tools.ietf.org/html/rfc6455#section-7.1.6
   ///
   /// Before the connection has been closed, this will be `null`.
-  String get closeReason => _webSocket.closeReason;
+  String? get closeReason => _webSocket.closeReason;
 
   @override
   Stream get stream => StreamView(_webSocket);
@@ -68,12 +68,12 @@ class WebSocketChannel extends StreamChannelMixin {
   /// `Sec-WebSocket-Accept` header.
   ///
   /// [initial handshake]: https://tools.ietf.org/html/rfc6455#section-4.2.2
-  static String signKey(String key) {
-    // We use [codeUnits] here rather than UTF-8-decoding the string because
-    // [key] is expected to be base64 encoded, and so will be pure ASCII.
-    return convert.base64
-        .encode(sha1.convert((key + webSocketGUID).codeUnits).bytes);
-  }
+  static String signKey(String key)
+      // We use [codeUnits] here rather than UTF-8-decoding the string because
+      // [key] is expected to be base64 encoded, and so will be pure ASCII.
+      =>
+      convert.base64
+          .encode(sha1.convert((key + webSocketGUID).codeUnits).bytes);
 
   /// Creates a new WebSocket handling messaging across an existing [channel].
   ///
@@ -96,7 +96,7 @@ class WebSocketChannel extends StreamChannelMixin {
   ///
   /// [WebSocket handshake]: https://tools.ietf.org/html/rfc6455#section-4
   WebSocketChannel(StreamChannel<List<int>> channel,
-      {String protocol, Duration pingInterval, bool serverSide = true})
+      {String? protocol, Duration? pingInterval, bool serverSide = true})
       : _webSocket = WebSocketImpl.fromSocket(
             channel.stream, channel.sink, protocol, serverSide)
           ..pingInterval = pingInterval;
@@ -106,8 +106,8 @@ class WebSocketChannel extends StreamChannelMixin {
   /// Connects to [uri] using and returns a channel that can be used to
   /// communicate over the resulting socket.
   ///
-  /// The optional [protocols] parameter is the same as [WebSocket.connect].
-  factory WebSocketChannel.connect(Uri uri, {Iterable<String> protocols}) =>
+  /// The optional [protocols] parameter is the same as `WebSocket.connect`.
+  factory WebSocketChannel.connect(Uri uri, {Iterable<String>? protocols}) =>
       platform.connect(uri, protocols: protocols);
 }
 
@@ -131,6 +131,6 @@ class WebSocketSink extends DelegatingStreamSink {
   /// [close code]: https://tools.ietf.org/html/rfc6455#section-7.1.5
   /// [reason]: https://tools.ietf.org/html/rfc6455#section-7.1.6
   @override
-  Future close([int closeCode, String closeReason]) =>
+  Future close([int? closeCode, String? closeReason]) =>
       _webSocket.close(closeCode, closeReason);
 }

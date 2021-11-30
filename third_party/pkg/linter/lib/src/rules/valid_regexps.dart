@@ -18,12 +18,12 @@ Regular expressions created with invalid syntax will throw a `FormatException`
 at runtime so should be avoided.
 
 **BAD:**
-```
+```dart
 print(RegExp(r'(').hasMatch('foo()'));
 ```
 
 **GOOD:**
-```
+```dart
 print(RegExp(r'\(').hasMatch('foo()'));
 ```
 
@@ -53,7 +53,7 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {
     final element = node.constructorName.staticElement?.enclosingElement;
-    if (element?.name == 'RegExp' && element?.library?.name == 'dart.core') {
+    if (element?.name == 'RegExp' && element?.library.name == 'dart.core') {
       final args = node.argumentList.arguments;
       if (args.isEmpty) {
         return;

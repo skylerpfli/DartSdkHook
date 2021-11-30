@@ -3,7 +3,8 @@
 // BSD-style license that can be found in the LICENSE file.
 
 import 'package:analyzer/dart/element/element.dart';
-import 'package:analyzer/src/dart/element/member.dart' show Member;
+import 'package:analyzer/src/dart/element/member.dart' show ExecutableMember;
+import 'package:dartdoc/src/element_type.dart';
 import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/render/source_code_renderer.dart';
 import 'package:dartdoc/src/utils.dart';
@@ -14,13 +15,19 @@ class Accessor extends ModelElement implements EnclosedElement {
   GetterSetterCombo enclosingCombo;
 
   Accessor(PropertyAccessorElement element, Library library,
-      PackageGraph packageGraph, Member originalMember)
+      PackageGraph packageGraph,
+      [ExecutableMember /*?*/ originalMember])
       : super(element, library, packageGraph, originalMember);
 
-  String get linkedReturnType {
-    assert(isGetter);
-    return modelType.createLinkedReturnTypeName();
-  }
+  @override
+  PropertyAccessorElement get element => super.element;
+
+  @override
+  ExecutableMember get originalMember => super.originalMember;
+
+  CallableElementTypeMixin _modelType;
+  CallableElementTypeMixin get modelType => _modelType ??=
+      ElementType.from((originalMember ?? element).type, library, packageGraph);
 
   bool get isSynthetic => element.isSynthetic;
 
@@ -31,7 +38,7 @@ class Accessor extends ModelElement implements EnclosedElement {
   // The [enclosingCombo] where this element was defined.
   GetterSetterCombo get definingCombo {
     if (_definingCombo == null) {
-      var variable = (element as PropertyAccessorElement).variable;
+      var variable = element.variable;
       _definingCombo = ModelElement.fromElement(variable, packageGraph);
       assert(_definingCombo != null, 'Unable to find defining combo');
     }
@@ -85,12 +92,12 @@ class Accessor extends ModelElement implements EnclosedElement {
 
   @override
   ModelElement get enclosingElement {
-    if (_accessor.enclosingElement is CompilationUnitElement) {
+    if (element.enclosingElement is CompilationUnitElement) {
       return packageGraph.findButDoNotCreateLibraryFor(
-          _accessor.enclosingElement.enclosingElement);
+          element.enclosingElement.enclosingElement);
     }
 
-    return ModelElement.from(_accessor.enclosingElement, library, packageGraph);
+    return ModelElement.from(element.enclosingElement, library, packageGraph);
   }
 
   @override
@@ -104,9 +111,9 @@ class Accessor extends ModelElement implements EnclosedElement {
     return enclosingCombo.href;
   }
 
-  bool get isGetter => _accessor.isGetter;
+  bool get isGetter => element.isGetter;
 
-  bool get isSetter => _accessor.isSetter;
+  bool get isSetter => element.isSetter;
 
   @override
   String get kind => 'accessor';
@@ -118,8 +125,6 @@ class Accessor extends ModelElement implements EnclosedElement {
     _namePart ??= super.namePart.split('=').first;
     return _namePart;
   }
-
-  PropertyAccessorElement get _accessor => (element as PropertyAccessorElement);
 }
 
 /// A getter or setter that is a member of a [Container].
@@ -149,11 +154,11 @@ class ContainerAccessor extends Accessor with ContainerMember, Inheritable {
 
   ContainerAccessor(PropertyAccessorElement element, Library library,
       PackageGraph packageGraph)
-      : super(element, library, packageGraph, null);
+      : super(element, library, packageGraph);
 
   ContainerAccessor.inherited(PropertyAccessorElement element, Library library,
       PackageGraph packageGraph, this._enclosingElement,
-      {Member originalMember})
+      {ExecutableMember originalMember})
       : super(element, library, packageGraph, originalMember) {
     _isInherited = true;
   }

@@ -1,3 +1,49 @@
+## 0.42.0
+* Add some tests and verify basic support for triple-shift, and check
+  to be sure that using the function as type parameter feature does not crash
+  dartdoc (#2518, #2517, #2603).
+* BREAKING CHANGE: Refactor of dartdoc features and annotations.  Use
+  `hasFeatures` in templates in place of checking `featuresAsString` as a
+  boolean (#2600), and `linkedNameWithParameters` for getting rendered
+  annotations (#2605).
+* Implement generic type parameters on annotations. (#2600, #2516).
+* No longer depend on mustache. (#2596)
+* BREAKING CHANGE: Replace mustache with mustachio.  Use `asCallable` instead
+  of `hasCallable` in templates to handle casts correctly. (#2564)
+
+## 0.41.0
+* Write out doc files for static methods on extensions. (#2588, #2591)
+* Fix a crash where dartdoc tried to create a duplicate field in the event
+  a static const extension member is declared. (#2585)
+* Implementation of generic type aliases. (#2584, #2575, #2558)
+* BREAKING CHANGE: Refactors to better support new type handling.
+  With #2573 and changes building on it, `linkedReturnType` must be changed
+  to either `modelType` or `modelType.returnType` in templates. (#2583, #2573)
+* Add an option for setting arguments for tool compilation. (#2576)
+* Make signature of categoriesWithPublicLibraries more accurate. (#2571)
+* Improve analysis performance by avoiding hints/lints when resolving
+  files. (#2566)
+* Additional implementation for Mustachio. (#2568, #2555, #2554, #2549, #2547,
+  #2546)
+* Update highlight.js to include plaintext support and optionally, warn if the
+  user does not specify a language on code blocks.  (#2560, #2559, #2593)
+* Fix invalid json generation on an empty categories list. (#2550)
+* Many minor internal cleanups related to new lints and ecosystem changes.
+
+## 0.40.0
+* More implementation added for Mustachio (#2481, #2482, #2488, #2491, #2497,
+  #2498, #2512, #2515, #2519, #2523, #2525)
+* originalMember is now an optional parameter to ModelElement(). #2507
+* Use custom handling for search, deleting jquery/typeahead libraries. (#2486,
+  #2483)
+* Small change to dartdoc exit/error text output. (#2489)
+* Fixed problem with stdout corruption in tool output due to null-safety
+  warnings. (#2493)
+* Connect interface types across intermediate classes. (#2495, #2485)
+* Update analyzer to 1.0.0 (#2524)  This version of dartdoc requires Dart 2.12
+  as a result.
+* Many minor internal cleanups updating code to newer Dart style and idioms.
+
 ## 0.39.0
 * More implementation added for Mustachio. (#2452, #2458, #2467)
 * Use `=` to document values for named parameters. (#2453, #2087)

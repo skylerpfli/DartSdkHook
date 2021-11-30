@@ -8,6 +8,7 @@ import 'package:dartdoc/src/render/documentation_renderer.dart';
 import 'package:dartdoc/src/render/element_type_renderer.dart';
 import 'package:dartdoc/src/render/enum_field_renderer.dart';
 import 'package:dartdoc/src/render/feature_renderer.dart';
+import 'package:dartdoc/src/render/language_feature_renderer.dart';
 import 'package:dartdoc/src/render/model_element_renderer.dart';
 import 'package:dartdoc/src/render/parameter_renderer.dart';
 import 'package:dartdoc/src/render/source_code_renderer.dart';
@@ -16,14 +17,19 @@ import 'package:dartdoc/src/render/type_parameters_renderer.dart';
 import 'package:dartdoc/src/render/typedef_renderer.dart';
 
 abstract class RendererFactory {
-  static RendererFactory forFormat(String format) {
+  const RendererFactory();
+
+  /// Retrieves the appropriate [RendererFactory] according to the
+  /// specified [format]. Currently supports `html` or `md` otherwise
+  /// throws an [ArgumentError].
+  factory RendererFactory.forFormat(String format) {
     switch (format) {
       case 'html':
-        return HtmlRenderFactory();
+        return const HtmlRenderFactory();
       case 'md':
-        return MdRenderFactory();
+        return const MdRenderFactory();
       default:
-        throw ArgumentError('Unsupported format: $format');
+        throw ArgumentError('Unsupported renderer format: $format');
     }
   }
 
@@ -35,11 +41,15 @@ abstract class RendererFactory {
 
   FeatureRenderer get featureRenderer;
 
+  LanguageFeatureRenderer get languageFeatureRenderer;
+
   ElementTypeRenderer<FunctionTypeElementType>
       get functionTypeElementTypeRenderer;
 
   ElementTypeRenderer<ParameterizedElementType>
       get parameterizedElementTypeRenderer;
+
+  ElementTypeRenderer<AliasedElementType> get aliasedElementTypeRenderer;
 
   ElementTypeRenderer<CallableElementType> get callableElementTypeRenderer;
 
@@ -59,11 +69,13 @@ abstract class RendererFactory {
 }
 
 class HtmlRenderFactory extends RendererFactory {
+  const HtmlRenderFactory();
+
   @override
   TemplateRenderer get templateRenderer => HtmlTemplateRenderer();
 
   @override
-  CategoryRenderer get categoryRenderer => CategoryRendererHtml();
+  CategoryRenderer get categoryRenderer => const CategoryRendererHtml();
 
   @override
   DocumentationRenderer get documentationRenderer =>
@@ -84,6 +96,10 @@ class HtmlRenderFactory extends RendererFactory {
           ParameterizedElementTypeRendererHtml();
 
   @override
+  ElementTypeRenderer<AliasedElementType> get aliasedElementTypeRenderer =>
+      AliasedElementTypeRendererHtml();
+
+  @override
   EnumFieldRenderer get enumFieldRenderer => EnumFieldRendererHtml();
 
   @override
@@ -101,21 +117,27 @@ class HtmlRenderFactory extends RendererFactory {
       TypeParametersRendererHtml();
 
   @override
-  TypedefRenderer get typedefRenderer => TypedefRendererHtml();
+  TypedefRenderer get typedefRenderer => const TypedefRendererHtml();
 
   @override
-  FeatureRenderer get featureRenderer => FeatureRendererHtml();
+  LanguageFeatureRenderer get languageFeatureRenderer =>
+      const LanguageFeatureRendererHtml();
 
   @override
   SourceCodeRenderer get sourceCodeRenderer => SourceCodeRendererHtml();
+
+  @override
+  FeatureRenderer get featureRenderer => FeatureRendererHtml();
 }
 
 class MdRenderFactory extends RendererFactory {
+  const MdRenderFactory();
+
   @override
   TemplateRenderer get templateRenderer => MdTemplateRenderer();
 
   @override
-  CategoryRenderer get categoryRenderer => CategoryRendererMd();
+  CategoryRenderer get categoryRenderer => const CategoryRendererMd();
 
   // We render documentation as HTML for now.
   // TODO(jdkoren): explore using documentation directly in the output file.
@@ -138,6 +160,10 @@ class MdRenderFactory extends RendererFactory {
           ParameterizedElementTypeRendererMd();
 
   @override
+  ElementTypeRenderer<AliasedElementType> get aliasedElementTypeRenderer =>
+      AliasedElementTypeRendererMd();
+
+  @override
   EnumFieldRenderer get enumFieldRenderer => EnumFieldRendererMd();
 
   @override
@@ -154,11 +180,15 @@ class MdRenderFactory extends RendererFactory {
       TypeParametersRendererMd();
 
   @override
-  TypedefRenderer get typedefRenderer => TypedefRendererMd();
+  TypedefRenderer get typedefRenderer => const TypedefRendererMd();
 
   @override
-  FeatureRenderer get featureRenderer => FeatureRendererMd();
+  LanguageFeatureRenderer get languageFeatureRenderer =>
+      const LanguageFeatureRendererMd();
 
   @override
   SourceCodeRenderer get sourceCodeRenderer => SourceCodeRendererNoop();
+
+  @override
+  FeatureRenderer get featureRenderer => FeatureRendererMd();
 }

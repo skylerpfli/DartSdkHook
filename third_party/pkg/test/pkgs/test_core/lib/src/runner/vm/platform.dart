@@ -36,7 +36,7 @@ class VMPlatform extends PlatformPlugin {
   VMPlatform();
 
   @override
-  StreamChannel loadChannel(String path, SuitePlatform platform) =>
+  StreamChannel<dynamic> loadChannel(String path, SuitePlatform platform) =>
       throw UnimplementedError();
 
   @override
@@ -67,33 +67,29 @@ class VMPlatform extends PlatformPlugin {
     Environment? environment;
     IsolateRef? isolateRef;
     if (_config.debug) {
-      // Print an empty line because the VM prints an "Observatory listening on"
-      // line and we don't want that to end up on the same line as the reporter
-      // info.
-      if (_config.reporter == 'compact') stdout.writeln();
-
-      var info = await Service.controlWebServer(enable: true);
+      var info =
+          await Service.controlWebServer(enable: true, silenceOutput: true);
       var isolateID = Service.getIsolateID(isolate)!;
 
       var libraryPath = p.toUri(p.absolute(path)).toString();
       client = await vmServiceConnectUri(_wsUriFor(info.serverUri.toString()));
       var isolateNumber = int.parse(isolateID.split('/').last);
       isolateRef = (await client.getVM())
-          .isolates
+          .isolates!
           .firstWhere((isolate) => isolate.number == isolateNumber.toString());
-      await client.setName(isolateRef.id, path);
-      var libraryRef = (await client.getIsolate(isolateRef.id))
-          .libraries
+      await client.setName(isolateRef.id!, path);
+      var libraryRef = (await client.getIsolate(isolateRef.id!))
+          .libraries!
           .firstWhere((library) => library.uri == libraryPath);
       var url = _observatoryUrlFor(
-          info.serverUri.toString(), isolateRef.id, libraryRef.id);
+          info.serverUri.toString(), isolateRef.id!, libraryRef.id!);
       environment = VMEnvironment(url, isolateRef, client);
     }
 
     environment ??= PluginEnvironment();
 
     var controller = deserializeSuite(
-        path, platform, suiteConfig, environment, channel, message,
+        path, platform, suiteConfig, environment, channel.cast(), message,
         gatherCoverage: () => _gatherCoverage(environment!));
 
     if (isolateRef != null) {
@@ -160,9 +156,9 @@ Future<Isolate> _spawnPrecompiledIsolate(
 
 Future<Map<String, dynamic>> _gatherCoverage(Environment environment) async {
   final isolateId = Uri.parse(environment.observatoryUrl!.fragment)
-      .queryParameters['isolateId']!;
-  return await collect(environment.observatoryUrl, false, false, false, {},
-      isolateIds: {isolateId});
+      .queryParameters['isolateId'];
+  return await collect(environment.observatoryUrl!, false, false, false, {},
+      isolateIds: {isolateId!});
 }
 
 Future<Isolate> _spawnPubServeIsolate(

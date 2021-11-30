@@ -1,8 +1,6 @@
 // Copyright (c) 2015, the Dart project authors.  Please see the AUTHORS file
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
-//
-// @dart=2.7
 
 // Windows doesn't support sending signals.
 @TestOn('vm && !windows')
@@ -260,7 +258,7 @@ Future<TestProcess> _runTest(List<String> args, {bool forwardStdio = false}) =>
         environment: {'_UNITTEST_TEMP_DIR': _tempDir},
         forwardStdio: forwardStdio);
 
-Future signalAndQuit(TestProcess test) async {
+Future<void> signalAndQuit(TestProcess test) async {
   test.signal(ProcessSignal.sigterm);
   await test.shouldExit();
   await expectLater(test.stderr, emitsDone);

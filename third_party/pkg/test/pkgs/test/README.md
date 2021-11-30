@@ -550,7 +550,7 @@ the following HTML file:
 ### Providing a custom HTML template
 
 If you want to share the same HTML file across all tests, you can provide a
-`custom-html-template-path` configuration option to your configuration file.
+`custom_html_template_path` configuration option to your configuration file.
 This file should follow the rules above, except that instead of the link tag
 add exactly one `{{testScript}}` in the place where you want the template processor to insert it.
 
@@ -562,7 +562,7 @@ custom HTML mechanics. In such a case, an error will be thrown.
 For example:
 
 ```yaml
-custom-html-template-path: html_template.html.tpl
+custom_html_template_path: html_template.html.tpl
 ```
 
 ```html
@@ -636,7 +636,7 @@ Timeouts can be configured on a per-test, -group, or -suite basis. To change the
 timeout for a test suite, put a `@Timeout` annotation at the top of the file:
 
 ```dart
-@Timeout(const Duration(seconds: 45))
+@Timeout(Duration(seconds: 45))
 
 import 'package:test/test.dart';
 
@@ -679,9 +679,9 @@ the `@OnPlatform` annotation and the `onPlatform` named parameter to `test()`
 and `group()`. For example:
 
 ```dart
-@OnPlatform(const {
+@OnPlatform({
   // Give Windows some extra wiggle-room before timing out.
-  'windows': const Timeout.factor(2)
+  'windows': Timeout.factor(2)
 })
 
 import 'package:test/test.dart';
@@ -721,7 +721,7 @@ Tags are defined using the `@Tags` annotation for suites and the `tags` named
 parameter to `test()` and `group()`. For example:
 
 ```dart
-@Tags(const ['browser'])
+@Tags(['browser'])
 
 import 'package:test/test.dart';
 

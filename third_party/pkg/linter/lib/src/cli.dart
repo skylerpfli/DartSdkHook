@@ -18,13 +18,13 @@ import 'rules.dart';
 const processFileFailedExitCode = 65;
 
 const unableToProcessExitCode = 64;
-String getRoot(List<String> paths) =>
+String? getRoot(List<String> paths) =>
     paths.length == 1 && Directory(paths[0]).existsSync() ? paths[0] : null;
 
 bool isLinterErrorCode(int code) =>
     code == unableToProcessExitCode || code == processFileFailedExitCode;
 
-void printUsage(ArgParser parser, IOSink out, [String error]) {
+void printUsage(ArgParser parser, IOSink out, [String? error]) {
   var message = 'Lints Dart source files and pubspecs.';
   if (error != null) {
     message = error;
@@ -43,6 +43,8 @@ Future run(List<String> args) async {
   await runLinter(args, LinterOptions());
 }
 
+/// todo (pq): consider using `dart analyze` where possible
+/// see: https://github.com/dart-lang/linter/pull/2537
 Future runLinter(List<String> args, LinterOptions initialLintOptions) async {
   // Force the rule registry to be populated.
   registerLintRules();
@@ -118,7 +120,7 @@ Future runLinter(List<String> args, LinterOptions initialLintOptions) async {
     lintOptions.dartSdkPath = customSdk;
   }
 
-  var packageConfigFile = options['packages'] as String;
+  var packageConfigFile = options['packages'] as String?;
 
   var stats = options['stats'] as bool;
   var benchmark = options['benchmark'] as bool;
@@ -148,14 +150,16 @@ Future runLinter(List<String> args, LinterOptions initialLintOptions) async {
     timer.stop();
 
     var commonRoot = getRoot(options.rest);
+    var machine = options['machine'] ?? false;
+    var quiet = options['quiet'] ?? false;
     ReportFormatter(errors, lintOptions.filter, outSink,
-        elapsedMs: timer.elapsedMilliseconds,
-        fileCount: linter.numSourcesAnalyzed,
-        fileRoot: commonRoot,
-        showStatistics: stats,
-        machineOutput: options['machine'] as bool,
-        quiet: options['quiet'] as bool)
-      ..write();
+            elapsedMs: timer.elapsedMilliseconds,
+            fileCount: linter.numSourcesAnalyzed,
+            fileRoot: commonRoot,
+            showStatistics: stats,
+            machineOutput: machine as bool,
+            quiet: quiet as bool)
+        .write();
     // ignore: avoid_catches_without_on_clauses
   } catch (err, stack) {
     errorSink.writeln('''An error occurred while linting

@@ -24,10 +24,9 @@ bool isShutdown = false;
 /// Returns the path to the global test configuration file.
 final String _globalConfigPath = () {
   if (Platform.environment.containsKey('DART_TEST_CONFIG')) {
-    return Platform.environment['DART_TEST_CONFIG'] as String;
+    return Platform.environment['DART_TEST_CONFIG']!;
   } else if (Platform.operatingSystem == 'windows') {
-    return p.join(
-        Platform.environment['LOCALAPPDATA'] as String, 'DartTest.yaml');
+    return p.join(Platform.environment['LOCALAPPDATA']!, 'DartTest.yaml');
   } else {
     return '${Platform.environment['HOME']}/.dart_test.yaml';
   }
@@ -49,7 +48,7 @@ void completeShutdown() {
     signalSubscription = null;
   }
   isShutdown = true;
-  stdinLines.cancel(immediate: true);
+  cancelStdinLines();
 }
 
 Future<void> _execute(List<String> args) async {

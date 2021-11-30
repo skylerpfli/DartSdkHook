@@ -5,9 +5,9 @@
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_proxy/shelf_proxy.dart';
 
-void main() async {
-  var server = await shelf_io.serve(
-    proxyHandler("https://dart.dev"),
+Future<void> main() async {
+  final server = await shelf_io.serve(
+    proxyHandler('https://dart.dev'),
     'localhost',
     8080,
   );

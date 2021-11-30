@@ -19,7 +19,7 @@ and named constructors should capitalize the first letter of each word
 except the first word, and use no separators.
 
 **GOOD:**
-```
+```dart
 var item;
 
 HttpRequest httpRequest;
@@ -56,7 +56,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   _Visitor(this.rule);
 
-  void checkIdentifier(SimpleIdentifier id, {bool underscoresOk = false}) {
+  void checkIdentifier(SimpleIdentifier? id, {bool underscoresOk = false}) {
     if (id == null) {
       return;
     }

@@ -5,6 +5,7 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
+import 'package:collection/collection.dart' show IterableExtension;
 
 import '../analyzer.dart';
 
@@ -18,7 +19,7 @@ If a class is immutable, it is usually a good idea to make its constructor a
 const constructor.
 
 **GOOD:**
-```
+```dart
 @immutable
 class A {
   final a;
@@ -27,7 +28,7 @@ class A {
 ```
 
 **BAD:**
-```
+```dart
 @immutable
 class A {
   final a;
@@ -43,10 +44,10 @@ String _immutableVarName = 'immutable';
 /// The name of `meta` library, used to define analysis annotations.
 String _metaLibName = 'meta';
 
-bool _isImmutable(Element element) =>
+bool _isImmutable(Element? element) =>
     element is PropertyAccessorElement &&
     element.name == _immutableVarName &&
-    element.library?.name == _metaLibName;
+    element.library.name == _metaLibName;
 
 class PreferConstConstructorsInImmutables extends LintRule
     implements NodeLintRule {
@@ -75,13 +76,16 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
     final element = node.declaredElement;
+    if (element == null) {
+      return;
+    }
     final isRedirected =
         element.isFactory && element.redirectedConstructor != null;
     if (node.body is EmptyFunctionBody &&
         !element.isConst &&
         !_hasMixin(element.enclosingElement) &&
         _hasImmutableAnnotation(element.enclosingElement) &&
-        (isRedirected && element.redirectedConstructor.isConst ||
+        (isRedirected && element.redirectedConstructor?.isConst == true ||
             (!isRedirected &&
                 _hasConstConstructorInvocation(node) &&
                 context.canBeConstConstructor(node)))) {
@@ -90,23 +94,29 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 
   bool _hasConstConstructorInvocation(ConstructorDeclaration node) {
-    final clazz = node.declaredElement.enclosingElement;
+    var declaredElement = node.declaredElement;
+    if (declaredElement == null) {
+      return false;
+    }
+    final clazz = declaredElement.enclosingElement;
     // construct with super
-    final superInvocation = node.initializers.firstWhere(
-        (e) => e is SuperConstructorInvocation,
-        orElse: () => null) as SuperConstructorInvocation;
-    if (superInvocation != null) return superInvocation.staticElement.isConst;
+    final superInvocation = node.initializers
+            .firstWhereOrNull((e) => e is SuperConstructorInvocation)
+        as SuperConstructorInvocation?;
+    if (superInvocation != null) {
+      return superInvocation.staticElement?.isConst == true;
+    }
     // construct with this
-    final redirectInvocation = node.initializers.firstWhere(
-        (e) => e is RedirectingConstructorInvocation,
-        orElse: () => null) as RedirectingConstructorInvocation;
+    final redirectInvocation = node.initializers
+            .firstWhereOrNull((e) => e is RedirectingConstructorInvocation)
+        as RedirectingConstructorInvocation?;
     if (redirectInvocation != null) {
-      return redirectInvocation.staticElement.isConst;
+      return redirectInvocation.staticElement?.isConst == true;
     }
     // construct with implicit super()
-    return clazz.supertype.constructors
-        .firstWhere((e) => e.name.isEmpty)
-        .isConst;
+    var supertype = clazz.supertype;
+    return supertype != null &&
+        supertype.constructors.firstWhere((e) => e.name.isEmpty).isConst;
   }
 
   bool _hasImmutableAnnotation(ClassElement clazz) {
@@ -120,7 +130,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   static Iterable<ClassElement> _getSelfAndInheritedClasses(
       ClassElement self) sync* {
-    var current = self;
+    ClassElement? current = self;
     final seenElements = <ClassElement>{};
     while (current != null && seenElements.add(current)) {
       yield current;

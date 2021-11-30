@@ -21,7 +21,7 @@ be non-null. Thus it's clear that the field is not expected to be `null` and it
 avoids null checks.
 
 **BAD:**
-```
+```dart
 int? _i;
 m() {
   _i!.abs();
@@ -29,7 +29,7 @@ m() {
 ```
 
 **GOOD:**
-```
+```dart
 late int _i;
 m() {
   _i.abs();
@@ -37,6 +37,14 @@ m() {
 ```
 
 ''';
+
+bool _isPrivateExtension(AstNode parent) {
+  if (parent is! ExtensionDeclaration) {
+    return false;
+  }
+  var parentName = parent.name?.name;
+  return parentName == null || Identifier.isPrivateName(parentName);
+}
 
 class UseLateForPrivateFieldsAndVariables extends LintRule
     implements NodeLintRule {
@@ -58,31 +66,34 @@ class UseLateForPrivateFieldsAndVariables extends LintRule
 }
 
 class _Visitor extends UnifyingAstVisitor<void> {
-  _Visitor(this.rule, this.context);
-
-  final LintRule rule;
-  final LinterContext context;
-
-  CompilationUnitElement currentUnit;
-
   static final lateables =
       <CompilationUnitElement, List<VariableDeclaration>>{};
+
   static final nullableAccess = <CompilationUnitElement, Set<Element>>{};
+  final LintRule rule;
+
+  final LinterContext context;
+
+  CompilationUnitElement? currentUnit;
+  _Visitor(this.rule, this.context);
 
   @override
   void visitCompilationUnit(CompilationUnit node) {
     if (node.featureSet.isEnabled(Feature.non_nullable)) {
-      currentUnit = node.declaredElement;
-      lateables.putIfAbsent(currentUnit, () => []);
-      nullableAccess.putIfAbsent(currentUnit, () => {});
+      var declaredElement = node.declaredElement;
+      if (declaredElement == null) {
+        return;
+      }
+      lateables.putIfAbsent(declaredElement, () => []);
+      nullableAccess.putIfAbsent(declaredElement, () => {});
+      currentUnit = declaredElement;
 
       super.visitCompilationUnit(node);
 
       final unitsInContext =
           context.allUnits.map((e) => e.unit.declaredElement).toSet();
-      final libraryUnitsInContext = node.declaredElement.library.units
-          .where(unitsInContext.contains)
-          .toSet();
+      final libraryUnitsInContext =
+          declaredElement.library.units.where(unitsInContext.contains).toSet();
       final areAllLibraryUnitsVisited =
           libraryUnitsInContext.every(lateables.containsKey);
       if (areAllLibraryUnitsVisited) {
@@ -98,10 +109,28 @@ class _Visitor extends UnifyingAstVisitor<void> {
   }
 
   @override
+  void visitFieldDeclaration(FieldDeclaration node) {
+    for (var variable in node.fields.variables) {
+      final parent = node.parent;
+      // see https://github.com/dart-lang/linter/pull/2189#issuecomment-660115569
+      // We could also include public members in private classes but to do that
+      // we'd need to ensure that there are no instances of either the
+      // enclosing class or any subclass of the enclosing class that are ever
+      // accessible outside this library.
+      if (parent != null &&
+          (Identifier.isPrivateName(variable.name.name) ||
+              _isPrivateExtension(parent))) {
+        _visit(variable);
+      }
+    }
+    super.visitFieldDeclaration(node);
+  }
+
+  @override
   void visitNode(AstNode node) {
     var parent = node.parent;
 
-    Element element;
+    Element? element;
     if (parent is AssignmentExpression && parent.leftHandSide == node) {
       element = DartTypeUtilities.getCanonicalElement(parent.writeElement);
     } else {
@@ -110,7 +139,7 @@ class _Visitor extends UnifyingAstVisitor<void> {
 
     if (element != null) {
       if (parent is Expression) {
-        parent = (parent as Expression).unParenthesized;
+        parent = parent.unParenthesized;
       }
       if (node is SimpleIdentifier && node.inDeclarationContext()) {
         // ok
@@ -120,30 +149,14 @@ class _Visitor extends UnifyingAstVisitor<void> {
         // ok non-null access
       } else if (parent is AssignmentExpression &&
           parent.operator.type == TokenType.EQ &&
-          context.typeSystem.isNonNullable(parent.rightHandSide.staticType)) {
+          DartTypeUtilities.isNonNullable(
+              context, parent.rightHandSide.staticType)) {
         // ok non-null access
       } else {
-        nullableAccess[currentUnit].add(element);
+        nullableAccess[currentUnit]?.add(element);
       }
     }
     super.visitNode(node);
-  }
-
-  @override
-  void visitFieldDeclaration(FieldDeclaration node) {
-    for (var variable in node.fields.variables) {
-      final parent = node.parent;
-      // see https://github.com/dart-lang/linter/pull/2189#issuecomment-660115569
-      // We could also include public members in private classes but to do that
-      // we'd need to ensure that there are no instances of either the
-      // enclosing class or any subclass of the enclosing class that are ever
-      // accessible outside this library.
-      if (Identifier.isPrivateName(variable.name.name) ||
-          _isPrivateExtension(parent)) {
-        _visit(variable);
-      }
-    }
-    super.visitFieldDeclaration(node);
   }
 
   @override
@@ -156,24 +169,11 @@ class _Visitor extends UnifyingAstVisitor<void> {
     super.visitTopLevelVariableDeclaration(node);
   }
 
-  void _visit(VariableDeclaration variable) {
-    if (variable.isLate) {
-      return;
-    }
-    if (variable.isSynthetic) {
-      return;
-    }
-    if (context.typeSystem.isNonNullable(variable.declaredElement.type)) {
-      return;
-    }
-    lateables[currentUnit].add(variable);
-  }
-
   void _checkAccess(Iterable<CompilationUnitElement> units) {
     final allNullableAccess =
-        units.expand((unit) => nullableAccess[unit]).toSet();
+        units.expand((unit) => nullableAccess[unit] ?? const {}).toSet();
     for (final unit in units) {
-      for (var variable in lateables[unit]) {
+      for (var variable in lateables[unit] ?? const <VariableDeclaration>[]) {
         if (!allNullableAccess.contains(variable.declaredElement)) {
           rule.reporter.reportError(AnalysisError(
               unit.source, variable.offset, variable.length, rule.lintCode));
@@ -181,8 +181,19 @@ class _Visitor extends UnifyingAstVisitor<void> {
       }
     }
   }
-}
 
-bool _isPrivateExtension(AstNode parent) =>
-    parent is ExtensionDeclaration &&
-    (parent.name == null || Identifier.isPrivateName(parent.name.name));
+  void _visit(VariableDeclaration variable) {
+    if (variable.isLate) {
+      return;
+    }
+    if (variable.isSynthetic) {
+      return;
+    }
+    var declaredElement = variable.declaredElement;
+    if (declaredElement == null ||
+        context.typeSystem.isNonNullable(declaredElement.type)) {
+      return;
+    }
+    lateables[currentUnit]?.add(variable);
+  }
+}

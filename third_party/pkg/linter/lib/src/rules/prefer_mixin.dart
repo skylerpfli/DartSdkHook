@@ -9,6 +9,9 @@ import 'package:analyzer/dart/element/element.dart';
 import '../analyzer.dart';
 import '../util/dart_type_utilities.dart';
 
+const _dartCollectionUri = 'dart.collection';
+const _dartConvertUri = 'dart.convert';
+
 const _desc = r'Prefer using mixins.';
 
 const _details = r'''
@@ -19,18 +22,24 @@ be used for types that are to be mixed in. As a result, this lint will flag any
 uses of a class in a `with` clause.
 
 **BAD:**
-```
+```dart
 class A {}
 class B extends Object with A {}
 ```
 
 **OK:**
-```
+```dart
 mixin M {}
 class C with M {}
 ```
 
 ''';
+
+const _iterableMixinName = 'IterableMixin';
+const _listMixinName = 'ListMixin';
+const _mapMixinName = 'MapMixin';
+const _setMixinName = 'SetMixin';
+const _stringConversionSinkName = 'StringConversionSinkMixin';
 
 class PreferMixin extends LintRule implements NodeLintRule {
   PreferMixin()
@@ -56,7 +65,10 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitWithClause(WithClause node) {
     for (var type in node.mixinTypes) {
-      final element = type.name.staticElement;
+      var element = type.name.staticElement;
+      if (element is TypeAliasElement) {
+        element = element.aliasedType.element;
+      }
       if (element is ClassElement && !element.isMixin && !isAllowed(element)) {
         rule.reportLint(type);
       }
@@ -67,10 +79,16 @@ class _Visitor extends SimpleAstVisitor<void> {
   /// compatibility reasons.
   /// (See: https://github.com/dart-lang/linter/issues/2082)
   static bool isAllowed(ClassElement element) =>
-      DartTypeUtilities.isClassElement(element, 'IterableMixin', 'dart.core') ||
-      DartTypeUtilities.isClassElement(element, 'ListMixin', 'dart.core') ||
-      DartTypeUtilities.isClassElement(element, 'MapMixin', 'dart.core') ||
-      DartTypeUtilities.isClassElement(element, 'SetMixin', 'dart.core') ||
+      // todo (pq): remove allowlist once legacy mixins are otherwise annotated.
+      // see: https://github.com/dart-lang/sdk/issues/45343
       DartTypeUtilities.isClassElement(
-          element, 'StringConversionSinkMixin', 'dart.convert');
+          element, _iterableMixinName, _dartCollectionUri) ||
+      DartTypeUtilities.isClassElement(
+          element, _listMixinName, _dartCollectionUri) ||
+      DartTypeUtilities.isClassElement(
+          element, _mapMixinName, _dartCollectionUri) ||
+      DartTypeUtilities.isClassElement(
+          element, _setMixinName, _dartCollectionUri) ||
+      DartTypeUtilities.isClassElement(
+          element, _stringConversionSinkName, _dartConvertUri);
 }

@@ -1,3 +1,44 @@
+## 0.3.0
+
+* **Breaking** `TestException.message` is now nullable.
+  * Fixes handling of `null` messages in remote exceptions.
+
+## 0.2.20
+
+* Fix some strong null safety mode errors in the original migration.
+
+## 0.2.19
+
+* Stable release for null safety.
+
+## 0.2.19-nullsafety.7
+
+* Expand upper bound constraints for some null safe migrated packages.
+
+## 0.2.19-nullsafety.6
+
+* Fix `spawnHybridUri` to respect language versioning of the spawned uri.
+
+## 0.2.19-nullsafety.5
+
+* Update SDK constraints to `>=2.12.0-0 <3.0.0` based on beta release
+  guidelines.
+
+## 0.2.19-nullsafety.4
+
+* Allow prerelease versions of the 2.12 sdk.
+
+## 0.2.19-nullsafety.3
+
+* Add capability to filter to a single exact test name in `Declarer`.
+* Add `markTestSkipped` API.
+
+## 0.2.19-nullsafety.2
+
+* Allow `2.10` stable and `2.11.0-dev` SDKs.
+* Annotate the classes used as annotations to restrict their usage to library
+  level.
+
 ## 0.2.19-nullsafety
 
 * Migrate to NNBD.
@@ -11,6 +52,10 @@
   future release it will be made available directly through
   `package:test_api/test_api.dart` (and hence through
   `package:test_core/test_core.dart` and `package:test/test.dart`).
+
+## 0.2.18+1 (Backport)
+
+* Fix `spawnHybridUri` to respect language versioning of the spawned uri.
 
 ## 0.2.18
 

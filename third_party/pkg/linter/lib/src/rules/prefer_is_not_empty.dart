@@ -26,14 +26,14 @@ When testing whether an iterable or map is empty, prefer `isNotEmpty` over
 `!isEmpty` to improve code readability.
 
 **GOOD:**
-```
+```dart
 if (todo.isNotEmpty) {
   sendResults(request, todo.isEmpty);
 }
 ```
 
 **BAD:**
-```
+```dart
 if (!sources.isEmpty) {
   process(sources);
 }
@@ -64,8 +64,8 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitSimpleIdentifier(SimpleIdentifier node) {
-    AstNode isEmptyAccess;
-    SimpleIdentifier isEmptyIdentifier;
+    late AstNode isEmptyAccess;
+    SimpleIdentifier? isEmptyIdentifier;
 
     final parent = node.parent;
     if (parent is PropertyAccess) {

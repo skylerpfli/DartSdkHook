@@ -10,7 +10,7 @@ import 'package:dartdoc/src/render/type_parameters_renderer.dart';
 class TypeParameter extends ModelElement {
   TypeParameter(
       TypeParameterElement element, Library library, PackageGraph packageGraph)
-      : super(element, library, packageGraph, null);
+      : super(element, library, packageGraph);
 
   @override
   ModelElement get enclosingElement => (element.enclosingElement != null)
@@ -38,7 +38,7 @@ class TypeParameter extends ModelElement {
 
   ElementType get boundType {
     if (_boundType == null) {
-      var bound = _typeParameter.bound;
+      var bound = element.bound;
       if (bound != null) {
         _boundType = ElementType.from(bound, library, packageGraph);
       }
@@ -50,9 +50,9 @@ class TypeParameter extends ModelElement {
 
   @override
   String get name {
-    _name ??= _typeParameter.bound != null
-        ? '${_typeParameter.name} extends ${boundType.nameWithGenerics}'
-        : _typeParameter.name;
+    _name ??= element.bound != null
+        ? '${element.name} extends ${boundType.nameWithGenerics}'
+        : element.name;
     return _name;
   }
 
@@ -60,13 +60,14 @@ class TypeParameter extends ModelElement {
 
   @override
   String get linkedName {
-    _linkedName ??= _typeParameter.bound != null
-        ? '${_typeParameter.name} extends ${boundType.linkedName}'
-        : _typeParameter.name;
+    _linkedName ??= element.bound != null
+        ? '${element.name} extends ${boundType.linkedName}'
+        : element.name;
     return _linkedName;
   }
 
-  TypeParameterElement get _typeParameter => element as TypeParameterElement;
+  @override
+  TypeParameterElement get element => super.element;
 }
 
 mixin TypeParameters implements ModelElement {

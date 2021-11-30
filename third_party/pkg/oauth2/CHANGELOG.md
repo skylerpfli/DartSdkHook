@@ -1,3 +1,15 @@
+# 2.0.0
+
+* Migrate to null safety.
+
+# 1.6.3
+
+* Added optional `codeVerifier` parameter to `AuthorizationCodeGrant` constructor.
+
+# 1.6.1
+
+* Added fix to make sure that credentials are only refreshed once when multiple calls are made.
+
 # 1.6.0
 
 * Added PKCE support to `AuthorizationCodeGrant`.

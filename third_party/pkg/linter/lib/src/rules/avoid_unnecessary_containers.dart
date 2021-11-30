@@ -16,7 +16,7 @@ Wrapping a widget in `Container` with no other parameters set has no effect
 and makes code needlessly more complex.
 
 **BAD:**
-```
+```dart
 Widget buildRow() {
   return Container(
       child: Row(
@@ -32,7 +32,7 @@ Widget buildRow() {
 ```
 
 **GOOD:**
-```
+```dart
 Widget buildRow() {
   return Row(
     children: <Widget>[
@@ -76,7 +76,7 @@ class _Visitor extends SimpleAstVisitor {
     final parent = node.parent;
     if (parent is NamedExpression && parent.name.label.name == 'child') {
       final args = parent.thisOrAncestorOfType<ArgumentList>();
-      if (args.arguments.length == 1) {
+      if (args?.arguments.length == 1) {
         final parentCreation =
             parent.thisOrAncestorOfType<InstanceCreationExpression>();
         if (parentCreation != null) {

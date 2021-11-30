@@ -1,7 +1,13 @@
+## 2.0.1
+
+- Use unique library names to correct docs issue.
+
 ## 2.0.0
 
 - Migrate to null safety.
 - Remove legacy APIs.
+- Adds `relativeRoot` property to `Package` which controls whether to
+  make the root URI relative when writing a configuration file.
 
 ## 1.9.3
 

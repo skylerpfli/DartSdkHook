@@ -19,7 +19,7 @@ methods is discouraged.  Dart allows functions to exist outside of classes for
 this very reason.
 
 **BAD:**
-```
+```dart
 class DateUtils {
   static DateTime mostRecent(List<DateTime> dates) {
     return dates.reduce((a, b) => a.isAfter(b) ? a : b);
@@ -32,7 +32,7 @@ class _Favorites {
 ```
 
 **GOOD:**
-```
+```dart
 DateTime mostRecent(List<DateTime> dates) {
   return dates.reduce((a, b) => a.isAfter(b) ? a : b);
 }
@@ -78,9 +78,11 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
-    if (node.members.isNotEmpty &&
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null &&
+        node.members.isNotEmpty &&
         node.members.every(_isStaticMember) &&
-        node.declaredElement.fields.any(_isNonConst)) {
+        declaredElement.fields.any(_isNonConst)) {
       rule.reportLint(node);
     }
   }

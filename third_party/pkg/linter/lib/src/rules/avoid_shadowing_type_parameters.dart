@@ -14,14 +14,14 @@ const _details = r'''
 **AVOID** shadowing type parameters.
 
 **BAD:**
-```
+```dart
 class A<T> {
   void fn<T>() {}
 }
 ```
 
 **GOOD:**
-```
+```dart
 class A<T> {
   void fn<U>() {}
 }
@@ -55,18 +55,17 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitFunctionDeclarationStatement(FunctionDeclarationStatement node) {
     var functionExpression = node.functionDeclaration.functionExpression;
-    if (functionExpression.typeParameters == null) {
-      return;
+    if (functionExpression.typeParameters != null) {
+      _checkAncestorParameters(functionExpression.typeParameters, node);
     }
-    _checkAncestorParameters(functionExpression.typeParameters, node);
   }
 
   @override
   void visitGenericTypeAlias(GenericTypeAlias node) {
-    if (node.functionType?.typeParameters == null) {
-      return;
+    var typeParameters = node.functionType?.typeParameters;
+    if (typeParameters != null) {
+      _checkForShadowing(typeParameters, node.typeParameters);
     }
-    _checkForShadowing(node.functionType.typeParameters, node.typeParameters);
   }
 
   @override
@@ -83,7 +82,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   // Check the ancestors of [node] for type parameter shadowing.
   void _checkAncestorParameters(
-      TypeParameterList typeParameters, AstNode node) {
+      TypeParameterList? typeParameters, AstNode node) {
     var parent = node.parent;
 
     while (parent != null) {
@@ -102,9 +101,9 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 
   // Check whether any of [typeParameters] shadow [ancestorTypeParameters].
-  void _checkForShadowing(TypeParameterList typeParameters,
-      TypeParameterList ancestorTypeParameters) {
-    if (ancestorTypeParameters == null) {
+  void _checkForShadowing(TypeParameterList? typeParameters,
+      TypeParameterList? ancestorTypeParameters) {
+    if (typeParameters == null || ancestorTypeParameters == null) {
       return;
     }
 

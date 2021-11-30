@@ -4,13 +4,18 @@
 
 import 'dart:convert';
 
-import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/ast.dart'
+    show Expression, InstanceCreationExpression;
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/source/line_info.dart';
 import 'package:analyzer/src/dart/element/element.dart';
+import 'package:dartdoc/src/element_type.dart';
+import 'package:dartdoc/src/model/annotation.dart';
+import 'package:dartdoc/src/model/feature.dart';
 import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/utils.dart';
 import 'package:dartdoc/src/warnings.dart';
+import 'package:meta/meta.dart';
 
 /// Mixin for top-level variables and fields (aka properties)
 mixin GetterSetterCombo on ModelElement {
@@ -18,25 +23,27 @@ mixin GetterSetterCombo on ModelElement {
 
   Accessor get setter;
 
+  @override
+  Iterable<Annotation> get annotations => [
+        ...super.annotations,
+        if (hasGetter) ...getter.annotations,
+        if (hasSetter) ...setter.annotations,
+      ];
+
   Iterable<Accessor> get allAccessors sync* {
     for (var a in [getter, setter]) {
       if (a != null) yield a;
     }
   }
 
-  Set<String> get comboFeatures {
-    var allFeatures = <String>{};
-    if (hasExplicitGetter && hasPublicGetter) {
-      allFeatures.addAll(getter.features);
-    }
-    if (hasExplicitSetter && hasPublicSetter) {
-      allFeatures.addAll(setter.features);
-    }
-    if (readOnly && !isFinal && !isConst) allFeatures.add('read-only');
-    if (writeOnly) allFeatures.add('write-only');
-    if (readWrite) allFeatures.add('read / write');
-    return allFeatures;
-  }
+  @protected
+  Set<Feature> get comboFeatures => {
+        if (hasExplicitGetter && hasPublicGetter) ...getter.features,
+        if (hasExplicitSetter && hasPublicSetter) ...setter.features,
+        if (readOnly && !isFinal && !isConst) Feature.readOnly,
+        if (writeOnly) Feature.writeOnly,
+        if (readWrite) Feature.readWrite,
+      };
 
   @override
   ModelElement enclosingElement;
@@ -120,17 +127,14 @@ mixin GetterSetterCombo on ModelElement {
     return _documentationFrom;
   }
 
-  bool get hasAccessorsWithDocs => (hasPublicGetter &&
-          !getter.isSynthetic &&
-          getter.documentation.isNotEmpty ||
-      hasPublicSetter &&
-          !setter.isSynthetic &&
-          setter.documentation.isNotEmpty);
+  bool get hasAccessorsWithDocs =>
+      (hasPublicGetter && !getter.isSynthetic && getter.hasDocumentation ||
+          hasPublicSetter && !setter.isSynthetic && setter.hasDocumentation);
 
   bool get getterSetterBothAvailable => (hasPublicGetter &&
-      getter.documentation.isNotEmpty &&
+      getter.hasDocumentation &&
       hasPublicSetter &&
-      setter.documentation.isNotEmpty);
+      setter.hasDocumentation);
 
   String _oneLineDoc;
 
@@ -182,18 +186,13 @@ mixin GetterSetterCombo on ModelElement {
     return buffer.toString();
   }
 
-  String get linkedReturnType {
-    if (hasGetter) {
-      return getter.linkedReturnType;
-    } else {
-      // TODO(jcollins-g): this results in the wrong span class for the return
-      // type.
-      return setter.linkedParamsNoMetadataOrNames;
-    }
+  ElementType get modelType {
+    if (hasGetter) return getter.modelType.returnType;
+    return setter.parameters.first.modelType;
   }
 
   @override
-  bool get canHaveParameters => hasSetter;
+  bool get isCallable => hasSetter;
 
   @override
   List<Parameter> get parameters => setter.parameters;

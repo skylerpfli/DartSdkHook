@@ -30,13 +30,13 @@ not always evaluate to `true` or `false` and does not perform redundant tests.
 This rule will hint to the test conflicting with the linted one.
 
 **BAD:**
-```
+```dart
 // foo can't be both equal and not equal to bar in the same expression
 if(foo == bar && something && foo != bar) {...}
 ```
 
 **BAD:**
-```
+```dart
 void compute(int foo) {
   if (foo == 4) {
     doSomething();
@@ -49,7 +49,7 @@ void compute(int foo) {
 ```
 
 **BAD:**
-```
+```dart
 void compute(bool foo) {
   if (foo) {
     return;
@@ -62,7 +62,7 @@ void compute(bool foo) {
 ```
 
 **GOOD:**
-```
+```dart
 void nestedOK() {
   if (foo == bar) {
     foo = baz;
@@ -72,7 +72,7 @@ void nestedOK() {
 ```
 
 **GOOD:**
-```
+```dart
 void nestedOk2() {
   if (foo == bar) {
     return;
@@ -84,7 +84,7 @@ void nestedOk2() {
 ```
 
 **GOOD:**
-```
+```dart
 void nestedOk5() {
   if (foo != null) {
     if (bar != null) {
@@ -98,7 +98,7 @@ void nestedOk5() {
 
 ''';
 
-Iterable<Element> _getElementsInExpression(Expression node) =>
+Iterable<Element?> _getElementsInExpression(Expression node) =>
     DartTypeUtilities.traverseNodesInDFS(node)
         .map(DartTypeUtilities.getCanonicalElementFromIdentifier)
         .where((e) => e != null);
@@ -139,14 +139,14 @@ class _InvariantBooleansVisitor extends ConditionScopeVisitor {
   _InvariantBooleansVisitor(this.rule);
 
   @override
-  void visitCondition(Expression node) {
+  void visitCondition(Expression? node) {
     // Right part discards reporting a subexpression already reported.
-    if (node?.staticType?.isDartCoreBool != true) {
+    if (node == null || node.staticType?.isDartCoreBool != true) {
       return;
     }
 
     final testedNodes = _findPreviousTestedExpressions(node);
-    testedNodes.evaluateInvariant().forEach((ContradictoryComparisons e) {
+    testedNodes?.evaluateInvariant()?.forEach((ContradictoryComparisons e) {
       final reportRule = _ContradictionReportRule(e);
       reportRule
         ..reporter = rule.reporter
@@ -166,10 +166,13 @@ class _InvariantBooleansVisitor extends ConditionScopeVisitor {
     }
   }
 
-  TestedExpressions _findPreviousTestedExpressions(Expression node) {
+  TestedExpressions? _findPreviousTestedExpressions(Expression node) {
     final elements = _getElementsInExpression(node);
-    final conjunctions = getTrueExpressions(elements).toSet();
-    final negations = getFalseExpressions(elements).toSet();
+    final conjunctions = getTrueExpressions(elements)?.toSet();
+    final negations = getFalseExpressions(elements)?.toSet();
+    if (conjunctions == null || negations == null) {
+      return null;
+    }
     return TestedExpressions(node, conjunctions, negations);
   }
 }

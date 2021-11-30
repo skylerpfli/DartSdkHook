@@ -16,7 +16,7 @@ Don't cast a nullable value to a non nullable type. This hides a null check
 and most of the time it is not what is expected.
 
 **BAD:**
-```
+```dart
 class A {}
 class B extends A {}
 
@@ -26,7 +26,7 @@ var v = a as A;
 ```
 
 **GOOD:**
-```
+```dart
 class A {}
 class B extends A {}
 
@@ -69,7 +69,9 @@ class _Visitor extends SimpleAstVisitor<void> {
   void visitAsExpression(AsExpression node) {
     final expressionType = node.expression.staticType;
     final type = node.type.type;
-    if (!expressionType.isDynamic &&
+    if (expressionType != null &&
+        type != null &&
+        !expressionType.isDynamic &&
         context.typeSystem.isNullable(expressionType) &&
         context.typeSystem.isNonNullable(type)) {
       rule.reportLint(node);

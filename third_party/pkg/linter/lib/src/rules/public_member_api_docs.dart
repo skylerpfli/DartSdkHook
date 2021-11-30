@@ -19,7 +19,7 @@ All non-overriding public members should be documented with `///` doc-style
 comments.
 
 **GOOD:**
-```
+```dart
 /// A good thing.
 abstract class Good {
   /// Start doing your thing.
@@ -30,7 +30,7 @@ abstract class Good {
 ```
 
 **BAD:**
-```
+```dart
 class Bad {
   void meh() { }
 }
@@ -41,7 +41,7 @@ to provide documentation.  For example, in the following, `Sub` needn't
 document `init` (though it certainly may, if there's need).
 
 **GOOD:**
-```
+```dart
 /// Base of all things.
 abstract class Base {
   /// Initialize the base.
@@ -112,7 +112,7 @@ class _Visitor extends SimpleAstVisitor {
     return false;
   }
 
-  Element getOverriddenMember(Element member) {
+  Element? getOverriddenMember(Element? member) {
     if (member == null) {
       return null;
     }
@@ -121,10 +121,15 @@ class _Visitor extends SimpleAstVisitor {
     if (classElement == null) {
       return null;
     }
+    var name = member.name;
+    if (name == null) {
+      return null;
+    }
+
     final libraryUri = classElement.library.source.uri;
     return context.inheritanceManager.getInherited(
       classElement.thisType,
-      Name(libraryUri, member.name),
+      Name(libraryUri, name),
     );
   }
 
@@ -334,14 +339,19 @@ class _Visitor extends SimpleAstVisitor {
       }
     }
 
+    var declaredElement = node.declaredElement;
+    if (declaredElement == null) {
+      return;
+    }
+
     // But only setters whose getter is missing a doc.
     for (var setter in setters) {
       final getter = getters[setter.name.name];
       if (getter == null) {
-        final libraryUri = node.declaredElement.library.source.uri;
+        final libraryUri = declaredElement.library.source.uri;
         // Look for an inherited getter.
-        Element getter = context.inheritanceManager.getMember(
-          node.declaredElement.thisType,
+        Element? getter = context.inheritanceManager.getMember(
+          declaredElement.thisType,
           Name(libraryUri, setter.name.name),
         );
         if (getter is PropertyAccessorElement) {

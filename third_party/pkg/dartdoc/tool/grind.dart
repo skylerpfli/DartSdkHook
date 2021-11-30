@@ -11,6 +11,7 @@ import 'package:dartdoc/src/package_meta.dart';
 import 'package:grinder/grinder.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart' as yaml;
+import 'package:yaml/yaml.dart';
 
 import 'subprocess_launcher.dart';
 
@@ -27,18 +28,25 @@ class GrindTestFailure {
 void expectFileContains(String path, List<Pattern> items) {
   var source = File(path);
   if (!source.existsSync()) {
-    throw GrindTestFailure('file not found: ${path}');
+    throw GrindTestFailure('file not found: $path');
   }
   for (var item in items) {
     if (!File(path).readAsStringSync().contains(item)) {
-      throw GrindTestFailure('Can not find ${item} in ${path}');
+      throw GrindTestFailure('Can not find $item in $path');
     }
   }
 }
 
+/// Path to the base directory for language tests.
+final String languageTestPath = Platform.environment['LANGUAGE_TESTS'];
+
+/// Enable the following experiments for language tests.
+final List<String> languageExperiments =
+    (Platform.environment['LANGUAGE_EXPERIMENTS'] ?? '').split(RegExp(r'\s+'));
+
 /// The pub cache inherited by grinder.
-final String defaultPubCache =
-    Platform.environment['PUB_CACHE'] ?? resolveTildePath('~/.pub-cache');
+final String defaultPubCache = Platform.environment['PUB_CACHE'] ??
+    path.context.resolveTildePath('~/.pub-cache');
 
 /// Run no more than the number of processors available in parallel.
 final MultiFutureTracker testFutures =
@@ -107,12 +115,16 @@ Directory _sdkDocsDir;
 
 Directory get sdkDocsDir => _sdkDocsDir ??= createTempSync('sdkdocs');
 
-Directory cleanFlutterDir = Directory(
-    path.join(resolveTildePath('~/.dartdoc_grinder'), 'cleanFlutter'));
+Directory cleanFlutterDir = Directory(path.join(
+    path.context.resolveTildePath('~/.dartdoc_grinder'), 'cleanFlutter'));
 
 Directory _flutterDir;
 
 Directory get flutterDir => _flutterDir ??= createTempSync('flutter');
+
+Directory _languageTestPackageDir;
+Directory get languageTestPackageDir =>
+    _languageTestPackageDir ??= createTempSync('languageTestPackageDir');
 
 Directory get testPackage =>
     Directory(path.joinAll(['testing', 'test_package']));
@@ -222,16 +234,24 @@ void updateThirdParty() async {
 void analyze() async {
   await SubprocessLauncher('analyze').runStreamed(
     sdkBin('dartanalyzer'),
-    [
-      '--fatal-infos',
-      '--options',
-      'analysis_options_presubmit.yaml',
-      'bin',
-      'lib',
-      'test',
-      'tool',
-    ],
+    ['--fatal-infos', '--options', 'analysis_options_presubmit.yaml', '.'],
   );
+  var testPackagePaths = [testPackage.path];
+  if (Platform.version.contains('dev')) {
+    testPackagePaths.add(testPackageExperiments.path);
+  }
+  for (var testPackagePath in testPackagePaths) {
+    await SubprocessLauncher('pub-get').runStreamed(
+      sdkBin('dart'),
+      ['pub', 'get'],
+      workingDirectory: testPackagePath,
+    );
+    await SubprocessLauncher('analyze-test-package').runStreamed(
+      sdkBin('dartanalyzer'),
+      ['.'],
+      workingDirectory: testPackagePath,
+    );
+  }
 }
 
 @Task('Check for dartfmt cleanliness')
@@ -241,22 +261,32 @@ void dartfmt() async {
     // Filter out test packages as they always have strange formatting.
     // Passing parameters to dartfmt for directories to search results in
     // filenames being stripped of the dirname so we have to filter here.
-    void addFileToFix(String fileName) {
+    void addFileToFix(String base, String fileName) {
       var pathComponents = path.split(fileName);
       if (pathComponents.isNotEmpty && pathComponents.first == 'testing') {
         return;
       }
-      filesToFix.add(fileName);
+      filesToFix.add(path.join(base, fileName));
     }
 
     log('Validating dartfmt with version ${Platform.version}');
-    await SubprocessLauncher('dartfmt').runStreamed(
-        sdkBin('dartfmt'),
-        [
-          '-n',
-          '.',
-        ],
-        perLine: addFileToFix);
+    // TODO(jcollins-g): return to global once dartfmt can handle generic
+    // type aliases
+    for (var subDirectory in [
+      'bin',
+      'lib',
+      'test',
+      'tool',
+      path.join('testing/test_package')
+    ]) {
+      await SubprocessLauncher('dartfmt').runStreamed(
+          sdkBin('dartfmt'),
+          [
+            '-n',
+            subDirectory,
+          ],
+          perLine: (n) => addFileToFix(subDirectory, n));
+    }
     if (filesToFix.isNotEmpty) {
       fail(
           'dartfmt found files needing reformatting. Use this command to reformat:\n'
@@ -270,10 +300,10 @@ void dartfmt() async {
 @Task('Run quick presubmit checks.')
 @Depends(
   analyze,
-  checkBuild,
-  smokeTest,
   dartfmt,
+  checkBuild,
   tryPublish,
+  smokeTest,
 )
 void presubmit() => null;
 
@@ -389,7 +419,8 @@ WarningsCollection jsonMessageIterableToWarnings(Iterable<Map> messageIterable,
     if (message.containsKey('level') &&
         message['level'] == 'WARNING' &&
         message.containsKey('data')) {
-      warningTexts.add(message['data']['text']);
+      var data = message['data'] as Map;
+      warningTexts.add(data['text']);
     }
   }
   return warningTexts;
@@ -435,9 +466,9 @@ Future<String> createComparisonDartdoc() async {
 /// to be a git repository), configured to use packages from the Dart SDK.
 ///
 /// This copy of dartdoc depends on the HEAD versions of various packages
-/// developed within the SDK, such as 'analyzer' and '_fe_analyzer_shared'.
-/// 'meta' is overridden if [overrideMeta] is true.
-Future<String> createSdkDartdoc(bool overrideMeta) async {
+/// developed within the SDK, such as 'analyzer', '_fe_analyzer_shared',
+/// and 'meta'.
+Future<String> createSdkDartdoc() async {
   var launcher = SubprocessLauncher('create-sdk-dartdoc');
   var dartdocSdk = Directory.systemTemp.createTempSync('dartdoc-sdk');
   await launcher
@@ -474,13 +505,9 @@ dependency_overrides:
     path: '${sdkClone.path}/pkg/analyzer'
   _fe_analyzer_shared:
     path: '${sdkClone.path}/pkg/_fe_analyzer_shared'
-''', mode: FileMode.append);
-  if (overrideMeta) {
-    dartdocPubspec.writeAsStringSync('''
   meta:
     path: '${sdkClone.path}/pkg/meta'
 ''', mode: FileMode.append);
-  }
   await launcher.runStreamed(sdkBin('pub'), ['get'],
       workingDirectory: dartdocSdk.path);
   return dartdocSdk.path;
@@ -490,8 +517,7 @@ dependency_overrides:
 Future<void> testWithAnalyzerSdk() async {
   var launcher = SubprocessLauncher('test-with-analyzer-sdk');
   // Do not override meta on branches outside of stable.
-  var sdkDartdoc =
-      await createSdkDartdoc(RegExp('[.]\w+').hasMatch(Platform.version));
+  var sdkDartdoc = await createSdkDartdoc();
   var defaultGrindParameter =
       Platform.environment['DARTDOC_GRIND_STEP'] ?? 'test';
   await launcher.runStreamed(
@@ -512,7 +538,7 @@ Future<List<Map>> _buildSdkDocs(String sdkDocsPath, Future<String> futureCwd,
         '--enable-asserts',
         path.join('bin', 'dartdoc.dart'),
         '--output',
-        '${sdkDocsPath}',
+        '$sdkDocsPath',
         '--sdk-docs',
         '--json',
         '--show-progress',
@@ -557,7 +583,11 @@ Future<void> buildTestExperimentsPackageDocs() async {
   await _buildTestPackageDocs(
       testPackageExperimentsDocsDir.absolute.path, Directory.current.path,
       testPackagePath: testPackageExperiments.absolute.path,
-      params: ['--enable-experiment', 'non-nullable', '--no-link-to-remote']);
+      params: [
+        '--enable-experiment',
+        'non-nullable,generic-metadata',
+        '--no-link-to-remote'
+      ]);
 }
 
 @Task('Serve experimental test package on port 8003.')
@@ -598,6 +628,7 @@ Future<void> startTestPackageDocsServer() async {
   log('launching dhttpd on port 8002 for SDK');
   var launcher = SubprocessLauncher('serve-test-package-docs');
   await launcher.runStreamed(sdkBin('pub'), [
+    'global',
     'run',
     'dhttpd',
     '--port',
@@ -617,8 +648,8 @@ Future<void> _serveDocsFrom(String servePath, int port, String context) async {
     await launcher.runStreamed(sdkBin('pub'), ['global', 'activate', 'dhttpd']);
     _serveReady = true;
   }
-  await launcher.runStreamed(
-      sdkBin('pub'), ['run', 'dhttpd', '--port', '$port', '--path', servePath]);
+  await launcher.runStreamed(sdkBin('pub'),
+      ['global', 'run', 'dhttpd', '--port', '$port', '--path', servePath]);
 }
 
 @Task('Serve generated SDK docs locally with dhttpd on port 8000')
@@ -627,6 +658,7 @@ Future<void> serveSdkDocs() async {
   log('launching dhttpd on port 8000 for SDK');
   var launcher = SubprocessLauncher('serve-sdk-docs');
   await launcher.runStreamed(sdkBin('pub'), [
+    'global',
     'run',
     'dhttpd',
     '--port',
@@ -668,6 +700,7 @@ Future<void> compareFlutterWarnings() async {
     var launcher = SubprocessLauncher('serve-flutter-docs');
     await launcher.runStreamed(sdkBin('pub'), ['get']);
     Future original = launcher.runStreamed(sdkBin('pub'), [
+      'global',
       'run',
       'dhttpd',
       '--port',
@@ -676,6 +709,7 @@ Future<void> compareFlutterWarnings() async {
       path.join(originalDartdocFlutter.absolute.path, 'dev', 'docs', 'doc'),
     ]);
     Future current = launcher.runStreamed(sdkBin('pub'), [
+      'global',
       'run',
       'dhttpd',
       '--port',
@@ -694,6 +728,7 @@ Future<void> serveFlutterDocs() async {
   var launcher = SubprocessLauncher('serve-flutter-docs');
   await launcher.runStreamed(sdkBin('pub'), ['get']);
   await launcher.runStreamed(sdkBin('pub'), [
+    'global',
     'run',
     'dhttpd',
     '--port',
@@ -701,6 +736,85 @@ Future<void> serveFlutterDocs() async {
     '--path',
     path.join(flutterDir.path, 'dev', 'docs', 'doc'),
   ]);
+}
+
+@Task('Serve language test directory docs on port 8004')
+@Depends(buildLanguageTestDocs)
+Future<void> serveLanguageTestDocs() async {
+  log('launching dhttpd on port 8004 for language tests');
+  var launcher = SubprocessLauncher('serve-language-test-docs');
+  await launcher.runStreamed(sdkBin('pub'), ['get']);
+  await launcher.runStreamed(sdkBin('pub'), [
+    'global',
+    'run',
+    'dhttpd',
+    '--port',
+    '8004',
+    '--path',
+    path.join(languageTestPackageDir.path, 'doc', 'api'),
+  ]);
+}
+
+@Task('Build docs for a language test directory in the SDK')
+Future<void> buildLanguageTestDocs() async {
+  var launcher = SubprocessLauncher('build-language-test-docs');
+  if (languageTestPath == null) {
+    fail(
+        'LANGUAGE_TESTS must be set to the SDK language test directory from which to copy tests');
+  }
+  var pubspecFile =
+      File(path.join(languageTestPackageDir.path, 'pubspec.yaml'));
+  pubspecFile.writeAsStringSync('''name: _language_test_package
+version: 0.0.1
+environment:
+  sdk: '>=${Platform.version.split(' ').first}'
+''');
+
+  var analyzerOptionsFile =
+      File(path.join(languageTestPackageDir.path, 'analysis_options.yaml'));
+  var analyzerOptions = languageExperiments.map((e) => '    - $e').join('\n');
+  analyzerOptionsFile.writeAsStringSync('''analyzer:
+   enable-experiment:
+$analyzerOptions
+ ''');
+
+  var libDir = Directory(path.join(languageTestPackageDir.path, 'lib'))
+    ..createSync();
+  var languageTestDir =
+      Directory(path.context.resolveTildePath(languageTestPath));
+  if (!languageTestDir.existsSync()) {
+    fail('language test dir does not exist:  $languageTestDir');
+  }
+
+  for (var entry in languageTestDir.listSync(recursive: true)) {
+    if (entry is File &&
+        entry.existsSync() &&
+        !entry.path.endsWith('_error_test.dart') &&
+        !entry.path.endsWith('_error_lib.dart')) {
+      var destDir = Directory(path.join(
+          libDir.path,
+          path.dirname(entry.absolute.path.replaceFirst(
+              languageTestDir.absolute.path + path.separator, ''))));
+      if (!destDir.existsSync()) destDir.createSync(recursive: true);
+      copy(entry, destDir);
+    }
+  }
+
+  await launcher.runStreamed('pub', ['get'],
+      workingDirectory: languageTestPackageDir.absolute.path);
+  await launcher.runStreamed(
+      Platform.resolvedExecutable,
+      [
+        '--enable-asserts',
+        path.join(Directory.current.absolute.path, 'bin', 'dartdoc.dart'),
+        '--json',
+        '--link-to-remote',
+        '--show-progress',
+        '--enable-experiment',
+        '${languageExperiments.join(",")}',
+        ...extraDartdocParameters,
+      ],
+      workingDirectory: languageTestPackageDir.absolute.path);
 }
 
 @Task('Validate flutter docs')
@@ -822,7 +936,7 @@ Future<String> _buildPubPackageDocs(
 ]) async {
   var env = _createThrowawayPubCache();
   var launcher = SubprocessLauncher(
-      'build-${pubPackageName}${version == null ? "" : "-$version"}${label == null ? "" : "-$label"}',
+      'build-$pubPackageName${version == null ? "" : "-$version"}${label == null ? "" : "-$label"}',
       env);
   var args = <String>['cache', 'add'];
   if (version != null) args.addAll(<String>['-v', version]);
@@ -902,22 +1016,18 @@ Future<void> checkChangelogHasVersion() async {
 
   var version = _getPackageVersion();
 
-  if (!changelog.readAsLinesSync().contains('## ${version}')) {
-    fail('ERROR: CHANGELOG.md does not mention version ${version}');
+  if (!changelog.readAsLinesSync().contains('## $version')) {
+    fail('ERROR: CHANGELOG.md does not mention version $version');
   }
 }
 
 String _getPackageVersion() {
   var pubspec = File('pubspec.yaml');
-  var yamlDoc;
-  if (pubspec.existsSync()) {
-    yamlDoc = yaml.loadYaml(pubspec.readAsStringSync());
-  }
-  if (yamlDoc == null) {
+  if (!pubspec.existsSync()) {
     fail('Cannot find pubspec.yaml in ${Directory.current}');
   }
-  var version = yamlDoc['version'];
-  return version;
+  var yamlDoc = yaml.loadYaml(pubspec.readAsStringSync()) as YamlMap;
+  return yamlDoc['version'];
 }
 
 @Task('Rebuild generated files')
@@ -928,16 +1038,16 @@ Future<void> build() async {
 
   // TODO(jcollins-g): port to build system?
   var version = _getPackageVersion();
-  var dartdoc_options = File('dartdoc_options.yaml');
-  await dartdoc_options.writeAsString('''dartdoc:
+  var dartdocOptions = File('dartdoc_options.yaml');
+  await dartdocOptions.writeAsString('''dartdoc:
   linkToSource:
     root: '.'
-    uriTemplate: 'https://github.com/dart-lang/dartdoc/blob/v${version}/%f%#L%l%'
+    uriTemplate: 'https://github.com/dart-lang/dartdoc/blob/v$version/%f%#L%l%'
 ''');
 }
 
 /// Paths in this list are relative to lib/.
-final _generated_files_list = <String>[
+final _generatedFilesList = <String>[
   '../dartdoc_options.yaml',
   'src/generator/html_resources.g.dart',
   'src/generator/templates.renderers.dart',
@@ -952,7 +1062,7 @@ Future<void> checkBuild() async {
 
   // Load original file contents into memory before running the builder;
   // it modifies them in place.
-  for (var relPath in _generated_files_list) {
+  for (var relPath in _generatedFilesList) {
     var origPath = path.joinAll(['lib', relPath]);
     var oldVersion = File(origPath);
     if (oldVersion.existsSync()) {
@@ -961,7 +1071,7 @@ Future<void> checkBuild() async {
   }
 
   await build();
-  for (var relPath in _generated_files_list) {
+  for (var relPath in _generatedFilesList) {
     var newVersion = File(path.join('lib', relPath));
     if (!await newVersion.exists()) {
       log('${newVersion.path} does not exist\n');

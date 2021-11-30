@@ -26,6 +26,7 @@ import 'rules/avoid_function_literals_in_foreach_calls.dart';
 import 'rules/avoid_implementing_value_types.dart';
 import 'rules/avoid_init_to_null.dart';
 import 'rules/avoid_js_rounded_ints.dart';
+import 'rules/avoid_multiple_declarations_per_line.dart';
 import 'rules/avoid_null_checks_in_equality_operators.dart';
 import 'rules/avoid_positional_boolean_parameters.dart';
 import 'rules/avoid_print.dart';
@@ -60,6 +61,7 @@ import 'rules/comment_references.dart';
 import 'rules/constant_identifier_names.dart';
 import 'rules/control_flow_in_finally.dart';
 import 'rules/curly_braces_in_flow_control_structures.dart';
+import 'rules/deprecated_consistency.dart';
 import 'rules/diagnostic_describe_all_properties.dart';
 import 'rules/directives_ordering.dart';
 import 'rules/do_not_use_environment.dart';
@@ -172,11 +174,14 @@ import 'rules/unnecessary_string_interpolations.dart';
 import 'rules/unnecessary_this.dart';
 import 'rules/unrelated_type_equality_checks.dart';
 import 'rules/unsafe_html.dart';
+import 'rules/use_build_context_synchronously.dart';
 import 'rules/use_full_hex_values_for_flutter_colors.dart';
 import 'rules/use_function_type_syntax_for_parameters.dart';
+import 'rules/use_if_null_to_convert_nulls_to_bools.dart';
 import 'rules/use_is_even_rather_than_modulo.dart';
 import 'rules/use_key_in_widget_constructors.dart';
 import 'rules/use_late_for_private_fields_and_variables.dart';
+import 'rules/use_named_constants.dart';
 import 'rules/use_raw_strings.dart';
 import 'rules/use_rethrow_when_possible.dart';
 import 'rules/use_setters_to_change_properties.dart';
@@ -185,7 +190,7 @@ import 'rules/use_to_and_as_if_applicable.dart';
 import 'rules/valid_regexps.dart';
 import 'rules/void_checks.dart';
 
-void registerLintRules() {
+void registerLintRules({bool inTestMode = false}) {
   Analyzer.facade.cacheLinterVersion();
   Analyzer.facade
     ..register(AlwaysDeclareReturnTypes())
@@ -210,6 +215,7 @@ void registerLintRules() {
     ..register(AvoidImplementingValueTypes())
     ..register(AvoidInitToNull())
     ..register(AvoidJsRoundedInts())
+    ..register(AvoidMultipleDeclarationsPerLine())
     ..register(AvoidNullChecksInEqualityOperators())
     ..register(AvoidOperatorEqualsOnMutableClasses())
     ..register(AvoidPositionalBooleanParameters())
@@ -245,6 +251,7 @@ void registerLintRules() {
     ..register(ConstantIdentifierNames())
     ..register(ControlFlowInFinally())
     ..register(CurlyBracesInFlowControlStructures())
+    ..register(DeprecatedConsistency())
     ..register(DiagnosticsDescribeAllProperties())
     ..register(DirectivesOrdering())
     ..register(DoNotUseEnvironment())
@@ -359,11 +366,14 @@ void registerLintRules() {
     ..register(UnnecessaryThis())
     ..register(UnrelatedTypeEqualityChecks())
     ..register(UnsafeHtml())
+    ..register(UseBuildContextSynchronously(inTestMode: inTestMode))
     ..register(UseFullHexValuesForFlutterColors())
     ..register(UseFunctionTypeSyntaxForParameters())
+    ..register(UseIfNullToConvertNullsToBools())
     ..register(UseIsEvenRatherThanModuloCheck())
     ..register(UseKeyInWidgetConstructors())
     ..register(UseLateForPrivateFieldsAndVariables())
+    ..register(UseNamedConstants())
     ..register(UseRethrowWhenPossible())
     ..register(UseRawStrings())
     ..register(UseSettersToChangeAProperty())

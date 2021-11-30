@@ -21,28 +21,28 @@ operator such as `??=` is used.  Otherwise, arbitrarily reassigning parameters
 is usually a mistake.
 
 **BAD:**
-```
+```dart
 void badFunction(int parameter) { // LINT
   parameter = 4;
 }
 ```
 
 **BAD:**
-```
+```dart
 void badFunction(int required, {int optional: 42}) { // LINT
   optional ??= 8;
 }
 ```
 
 **BAD:**
-```
+```dart
 void badFunctionPositional(int required, [int optional = 42]) { // LINT
   optional ??= 8;
 }
 ```
 
 **BAD:**
-```
+```dart
 class A {
     void badMethod(int parameter) { // LINT
     parameter = 4;
@@ -51,28 +51,28 @@ class A {
 ```
 
 **GOOD:**
-```
+```dart
 void ok(String parameter) {
   print(parameter);
 }
 ```
 
 **GOOD:**
-```
+```dart
 void actuallyGood(int required, {int optional}) { // OK
   optional ??= ...;
 }
 ```
 
 **GOOD:**
-```
+```dart
 void actuallyGoodPositional(int required, [int optional]) { // OK
   optional ??= ...;
 }
 ```
 
 **GOOD:**
-```
+```dart
 class A {
   void ok(String parameter) {
     print(parameter);
@@ -92,10 +92,11 @@ bool _isDefaultFormalParameterWithoutDefaultValueReassigned(
     _isFormalParameterReassigned(parameter, assignment);
 
 bool _isFormalParameterReassigned(
-        FormalParameter parameter, AssignmentExpression assignment) =>
-    assignment.leftHandSide is SimpleIdentifier &&
-    (assignment.leftHandSide as SimpleIdentifier).staticElement ==
-        parameter.declaredElement;
+    FormalParameter parameter, AssignmentExpression assignment) {
+  var leftHandSide = assignment.leftHandSide;
+  return leftHandSide is SimpleIdentifier &&
+      leftHandSide.staticElement == parameter.declaredElement;
+}
 
 bool _preOrPostFixExpressionMutation(FormalParameter parameter, AstNode n) =>
     n is PrefixExpression &&
@@ -135,8 +136,10 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (parameters != null) {
       // Getter do not have formal parameters.
       parameters.parameters.forEach((e) {
-        if (node.functionExpression.body
-            .isPotentiallyMutatedInScope(e.declaredElement)) {
+        var declaredElement = e.declaredElement;
+        if (declaredElement != null &&
+            node.functionExpression.body
+                .isPotentiallyMutatedInScope(declaredElement)) {
           _reportIfSimpleParameterOrWithDefaultValue(e, node);
         }
       });
@@ -145,11 +148,13 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
-    final parameterList = node?.parameters;
+    final parameterList = node.parameters;
     if (parameterList != null) {
       // Getters don't have parameters.
       parameterList.parameters.forEach((e) {
-        if (node.body.isPotentiallyMutatedInScope(e.declaredElement)) {
+        var declaredElement = e.declaredElement;
+        if (declaredElement != null &&
+            node.body.isPotentiallyMutatedInScope(declaredElement)) {
           _reportIfSimpleParameterOrWithDefaultValue(e, node);
         }
       });

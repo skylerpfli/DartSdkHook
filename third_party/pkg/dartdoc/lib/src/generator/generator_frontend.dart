@@ -147,10 +147,19 @@ class GeneratorFrontEnd implements Generator {
                 writer, packageGraph, lib, extension, property);
           }
 
-          for (var staticField in filterNonDocumented(extension.staticFields)) {
+          for (var staticField
+              in filterNonDocumented(extension.variableStaticFields)) {
             indexAccumulator.add(staticField);
             _generatorBackend.generateProperty(
                 writer, packageGraph, lib, extension, staticField);
+          }
+
+          for (var method in filterNonDocumented(extension.staticMethods)) {
+            if (!method.isCanonical) continue;
+
+            indexAccumulator.add(method);
+            _generatorBackend.generateMethod(
+                writer, packageGraph, lib, extension, method);
           }
         }
 
@@ -329,5 +338,5 @@ abstract class GeneratorBackend {
       FileWriter writer, PackageGraph graph, Library library, Typedef typedef);
 
   /// Emit files not specific to a Dart language element.
-  void generateAdditionalFiles(FileWriter writer, PackageGraph graph);
+  Future<void> generateAdditionalFiles(FileWriter writer, PackageGraph graph);
 }

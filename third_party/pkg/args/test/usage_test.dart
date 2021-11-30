@@ -404,6 +404,22 @@ void main() {
           ''');
     });
 
+    test('display "mandatory" after a mandatory option', () {
+      var parser = ArgParser();
+      parser.addOption('test', mandatory: true);
+      validateUsage(parser, '''
+        --test (mandatory)    
+        ''');
+    });
+
+    test('throw argument error if option is mandatory with a default value',
+        () {
+      var parser = ArgParser();
+      expect(
+          () => parser.addOption('test', mandatory: true, defaultsTo: 'test'),
+          throwsArgumentError);
+    });
+
     group('separators', () {
       test("separates options where it's placed", () {
         var parser = ArgParser();

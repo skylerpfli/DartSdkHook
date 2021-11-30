@@ -7,8 +7,6 @@ import 'package:path/path.dart' as p;
 import 'package:pedantic/pedantic.dart';
 import 'package:shelf/shelf.dart';
 
-import 'src/utils.dart';
-
 /// A handler that proxies requests to [url].
 ///
 /// To generate the proxy request, this concatenates [url] and [Request.url].
@@ -23,7 +21,7 @@ import 'src/utils.dart';
 ///
 /// [proxyName] is used in headers to identify this proxy. It should be a valid
 /// HTTP token or a hostname. It defaults to `shelf_proxy`.
-Handler proxyHandler(url, {http.Client client, String proxyName}) {
+Handler proxyHandler(url, {http.Client? client, String? proxyName}) {
   Uri uri;
   if (url is String) {
     uri = Uri.parse(url);
@@ -32,7 +30,7 @@ Handler proxyHandler(url, {http.Client client, String proxyName}) {
   } else {
     throw ArgumentError.value(url, 'url', 'url must be a String or Uri.');
   }
-  client ??= http.Client();
+  final nonNullClient = client ?? http.Client();
   proxyName ??= 'shelf_proxy';
 
   return (serverRequest) async {
@@ -40,19 +38,23 @@ Handler proxyHandler(url, {http.Client client, String proxyName}) {
 
     // TODO(nweiz): Handle TRACE requests correctly. See
     // http://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html#sec9.8
-    var requestUrl = uri.resolve(serverRequest.url.toString());
-    var clientRequest = http.StreamedRequest(serverRequest.method, requestUrl);
-    clientRequest.followRedirects = false;
-    clientRequest.headers.addAll(serverRequest.headers);
-    clientRequest.headers['Host'] = uri.authority;
+    final requestUrl = uri.resolve(serverRequest.url.toString());
+    final clientRequest = http.StreamedRequest(serverRequest.method, requestUrl)
+      ..followRedirects = false
+      ..headers.addAll(serverRequest.headers)
+      ..headers['Host'] = uri.authority;
 
     // Add a Via header. See
     // http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.45
     _addHeader(clientRequest.headers, 'via',
         '${serverRequest.protocolVersion} $proxyName');
 
-    unawaited(store(serverRequest.read(), clientRequest.sink));
-    var clientResponse = await client.send(clientRequest);
+    unawaited(serverRequest
+        .read()
+        .forEach(clientRequest.sink.add)
+        .catchError(clientRequest.sink.addError)
+        .whenComplete(clientRequest.sink.close));
+    final clientResponse = await nonNullClient.send(clientRequest);
     // Add a Via header. See
     // http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.45
     _addHeader(clientResponse.headers, 'via', '1.1 $proxyName');
@@ -77,11 +79,11 @@ Handler proxyHandler(url, {http.Client client, String proxyName}) {
     // than the destination server, if possible.
     if (clientResponse.isRedirect &&
         clientResponse.headers.containsKey('location')) {
-      var location =
-          requestUrl.resolve(clientResponse.headers['location']).toString();
+      final location =
+          requestUrl.resolve(clientResponse.headers['location']!).toString();
       if (p.url.isWithin(uri.toString(), location)) {
         clientResponse.headers['location'] =
-            '/' + p.url.relative(location, from: uri.toString());
+            '/${p.url.relative(location, from: uri.toString())}';
       } else {
         clientResponse.headers['location'] = location;
       }
@@ -92,17 +94,10 @@ Handler proxyHandler(url, {http.Client client, String proxyName}) {
   };
 }
 
-/// Use [proxyHandler] instead.
-@deprecated
-Handler createProxyHandler(Uri rootUri) => proxyHandler(rootUri);
-
 // TODO(nweiz): use built-in methods for this when http and shelf support them.
 /// Add a header with [name] and [value] to [headers], handling existing headers
 /// gracefully.
 void _addHeader(Map<String, String> headers, String name, String value) {
-  if (headers.containsKey(name)) {
-    headers[name] += ', $value';
-  } else {
-    headers[name] = value;
-  }
+  final existing = headers[name];
+  headers[name] = existing == null ? value : '$existing, $value';
 }

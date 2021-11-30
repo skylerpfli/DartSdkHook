@@ -27,7 +27,7 @@ Returning `this` is allowed for:
 - methods defined in extensions
 
 **BAD:**
-```
+```dart
 var buffer = StringBuffer()
   .write('one')
   .write('two')
@@ -35,7 +35,7 @@ var buffer = StringBuffer()
 ```
 
 **GOOD:**
-```
+```dart
 var buffer = StringBuffer()
   ..write('one')
   ..write('two')
@@ -82,7 +82,7 @@ class _Visitor extends SimpleAstVisitor<void> {
         return;
       }
 
-      var returnType = node.declaredElement.returnType;
+      var returnType = node.declaredElement?.returnType;
       if (returnType is InterfaceType &&
           returnType.element == parent.declaredElement) {
       } else {

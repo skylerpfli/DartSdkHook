@@ -17,7 +17,6 @@ import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/package_meta.dart' show PackageMeta;
 import 'package:dartdoc/src/quiver.dart' as quiver;
 import 'package:dartdoc/src/warnings.dart';
-import 'package:path/path.dart' as path;
 
 /// Find all hashable children of a given element that are defined in the
 /// [LibraryElement] given at initialization.
@@ -67,7 +66,7 @@ class Library extends ModelElement with Categorization, TopLevelContainer {
 
   Library._(LibraryElement element, PackageGraph packageGraph, this.package,
       this._restoredUri, this._exportedAndLocalElements)
-      : super(element, null, packageGraph, null);
+      : super(element, null, packageGraph);
 
   factory Library.fromLibraryResult(DartDocResolvedLibrary resolvedLibrary,
       PackageGraph packageGraph, Package package) {
@@ -105,9 +104,9 @@ class Library extends ModelElement with Categorization, TopLevelContainer {
       compilationUnit.enums,
       compilationUnit.extensions,
       compilationUnit.functions,
-      compilationUnit.functionTypeAliases,
       compilationUnit.mixins,
       compilationUnit.topLevelVariables,
+      compilationUnit.typeAliases,
       compilationUnit.types,
     ]);
   }
@@ -441,7 +440,7 @@ class Library extends ModelElement with Categorization, TopLevelContainer {
       } else if (element.name != null && element.name.isNotEmpty) {
         _name = element.name;
       } else {
-        _name = path.basename(source.fullName);
+        _name = pathContext.basename(source.fullName);
         if (_name.endsWith('.dart')) {
           _name = _name.substring(0, _name.length - '.dart'.length);
         }
@@ -494,7 +493,7 @@ class Library extends ModelElement with Categorization, TopLevelContainer {
   @override
   List<Typedef> get typedefs {
     _typedefs ??= _exportedAndLocalElements
-        .whereType<FunctionTypeAliasElement>()
+        .whereType<TypeAliasElement>()
         .map((e) => ModelElement.from(e, this, packageGraph) as Typedef)
         .toList(growable: false);
     return _typedefs;

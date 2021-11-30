@@ -1,53 +1,37 @@
-// Copyright (c) 2020, the Dart project authors. Please see the AUTHORS file
+// Copyright (c) 2021, the Dart project authors. Please see the AUTHORS file
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'package:dartdoc/src/model/language_feature.dart';
+import 'dart:convert';
 
+import 'package:dartdoc/src/model/annotation.dart';
+import 'package:dartdoc/src/model/feature.dart';
+
+const _htmlEscape = HtmlEscape();
+
+/// A renderer for subclasses of [Feature]. (The base class does not require
+/// separate rendering, represented by pre-defined constant strings.)
 abstract class FeatureRenderer {
-  String renderFeatureLabel(LanguageFeature feature);
+  const FeatureRenderer();
+
+  /// Render this [Annotation].
+  String renderAnnotation(Annotation feature);
 }
 
+/// A HTML renderer for a [Feature].
 class FeatureRendererHtml extends FeatureRenderer {
-  static final FeatureRendererHtml _instance = FeatureRendererHtml._();
-
-  factory FeatureRendererHtml() {
-    return _instance;
-  }
-
-  FeatureRendererHtml._();
+  const FeatureRendererHtml();
 
   @override
-  String renderFeatureLabel(LanguageFeature feature) {
-    final classesText = [
-      'feature',
-      'feature-${feature.name.split(' ').join('-').toLowerCase()}'
-    ].join(' ');
-
-    if (feature.featureUrl != null) {
-      return '<a href="${feature.featureUrl}" class="${classesText}"'
-          ' title="${feature.featureDescription}">${feature.name}</a>';
-    }
-
-    return '<span class="${classesText}" '
-        'title="${feature.featureDescription}">${feature.name}</span>';
-  }
+  String renderAnnotation(Annotation feature) =>
+      '@' + feature.linkedName + _htmlEscape.convert(feature.parameterText);
 }
 
+/// A markdown renderer for a [Feature].
 class FeatureRendererMd extends FeatureRenderer {
-  static final FeatureRendererMd _instance = FeatureRendererMd._();
-
-  factory FeatureRendererMd() {
-    return _instance;
-  }
-
-  FeatureRendererMd._();
+  const FeatureRendererMd();
 
   @override
-  String renderFeatureLabel(LanguageFeature feature) {
-    if (feature.featureUrl != null) {
-      return '*[\<${feature.name}\>](${feature.featureUrl})*';
-    }
-    return '*\<${feature.name}\>*';
-  }
+  String renderAnnotation(Annotation feature) =>
+      '@' + feature.linkedName + _htmlEscape.convert(feature.parameterText);
 }

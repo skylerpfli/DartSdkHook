@@ -16,7 +16,7 @@ const _details = r'''
 **DO** place “dart:” imports before other imports.
 
 **BAD:**
-```
+```dart
 import 'package:bar/bar.dart';
 import 'package:foo/foo.dart';
 
@@ -25,7 +25,7 @@ import 'dart:html';  // LINT
 ```
 
 **BAD:**
-```
+```dart
 import 'dart:html';  // OK
 import 'package:bar/bar.dart';
 
@@ -34,7 +34,7 @@ import 'package:foo/foo.dart';
 ```
 
 **GOOD:**
-```
+```dart
 import 'dart:async';  // OK
 import 'dart:html';  // OK
 
@@ -45,15 +45,16 @@ import 'package:foo/foo.dart';
 **DO** place “package:” imports before relative imports.
 
 **BAD:**
-```
+```dart
 import 'a.dart';
 import 'b.dart';
 
 import 'package:bar/bar.dart';  // LINT
 import 'package:foo/foo.dart';  // LINT
 ```
+
 **BAD:**
-```
+```dart
 import 'package:bar/bar.dart';  // OK
 import 'a.dart';
 
@@ -62,7 +63,7 @@ import 'b.dart';
 ```
 
 **GOOD:**
-```
+```dart
 import 'package:bar/bar.dart';  // OK
 import 'package:foo/foo.dart';  // OK
 
@@ -73,14 +74,14 @@ import 'b.dart';
 **DO** specify exports in a separate section after all imports.
 
 **BAD:**
-```
+```dart
 import 'src/error.dart';
 export 'src/error.dart'; // LINT
 import 'src/string_source.dart';
 ```
 
 **GOOD:**
-```
+```dart
 import 'src/error.dart';
 import 'src/string_source.dart';
 
@@ -90,7 +91,7 @@ export 'src/error.dart'; // OK
 **DO** sort sections alphabetically.
 
 **BAD:**
-```
+```dart
 import 'package:foo/bar.dart'; // OK
 import 'package:bar/bar.dart'; // LINT
 
@@ -99,7 +100,7 @@ import 'a.dart'; // LINT
 ```
 
 **GOOD:**
-```
+```dart
 import 'package:bar/bar.dart'; // OK
 import 'package:foo/bar.dart'; // OK
 
@@ -120,20 +121,24 @@ const _importKeyword = 'import';
 String _dartDirectiveGoFirst(String type) =>
     "Place 'dart:' ${type}s before other ${type}s.";
 
-bool _isAbsoluteDirective(NamespaceDirective node) =>
-    node.uriContent.contains(':');
+bool _isAbsoluteDirective(NamespaceDirective node) {
+  var uriContent = node.uriContent;
+  return uriContent != null && uriContent.contains(':');
+}
 
-bool _isDartDirective(NamespaceDirective node) =>
-    node.uriContent.startsWith('dart:');
+bool _isDartDirective(NamespaceDirective node) {
+  var uriContent = node.uriContent;
+  return uriContent != null && uriContent.startsWith('dart:');
+}
 
 bool _isExportDirective(Directive node) => node is ExportDirective;
 
-bool _isImportDirective(Directive node) => node is ImportDirective;
-
 bool _isNotDartDirective(NamespaceDirective node) => !_isDartDirective(node);
 
-bool _isPackageDirective(NamespaceDirective node) =>
-    node.uriContent.startsWith('package:');
+bool _isPackageDirective(NamespaceDirective node) {
+  var uriContent = node.uriContent;
+  return uriContent != null && uriContent.startsWith('package:');
+}
 
 bool _isPartDirective(Directive node) => node is PartDirective;
 
@@ -145,7 +150,7 @@ String _packageDirectiveBeforeRelative(String type) =>
 
 class DirectivesOrdering extends LintRule
     implements ProjectVisitor, NodeLintRule {
-  DartProject project;
+  DartProject? project;
 
   DirectivesOrdering()
       : super(
@@ -200,8 +205,11 @@ class _PackageBox {
   bool _isNotOwnPackageDirective(NamespaceDirective node) =>
       _isPackageDirective(node) && !_isOwnPackageDirective(node);
 
-  bool _isOwnPackageDirective(NamespaceDirective node) =>
-      node.uriContent.startsWith('package:$_packageName/');
+  bool _isOwnPackageDirective(NamespaceDirective node) {
+    var uriContent = node.uriContent;
+    return uriContent != null &&
+        uriContent.startsWith('package:$_packageName/');
+  }
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
@@ -209,7 +217,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   _Visitor(this.rule);
 
-  DartProject get project => rule.project;
+  DartProject? get project => rule.project;
 
   @override
   void visitCompilationUnit(CompilationUnit node) {
@@ -262,8 +270,9 @@ class _Visitor extends SimpleAstVisitor<void> {
     _checkSectionInOrder(lintedNodes, relativeImports);
     _checkSectionInOrder(lintedNodes, relativeExports);
 
-    if (project != null) {
-      final packageBox = _PackageBox(project.name);
+    var projectName = project?.name;
+    if (projectName != null) {
+      final packageBox = _PackageBox(projectName);
 
       final thirdPartyPackageImports =
           importDirectives.where(packageBox._isNotOwnPackageDirective);
@@ -336,23 +345,24 @@ class _Visitor extends SimpleAstVisitor<void> {
       }
     }
 
-    NamespaceDirective previousDirective;
+    NamespaceDirective? previousDirective;
     for (var directive in nodes) {
-      if (previousDirective != null &&
-          previousDirective.uriContent.compareTo(directive.uriContent) > 0) {
-        reportDirective(directive);
+      if (previousDirective != null) {
+        var previousUri = previousDirective.uriContent;
+        var directiveUri = directive.uriContent;
+        if (previousUri != null &&
+            directiveUri != null &&
+            previousUri.compareTo(directiveUri) > 0) {
+          reportDirective(directive);
+        }
       }
       previousDirective = directive;
     }
   }
 
   Iterable<ExportDirective> _getExportDirectives(CompilationUnit node) =>
-      node.directives
-          .where(_isExportDirective)
-          .map((e) => e as ExportDirective);
+      node.directives.whereType<ExportDirective>();
 
   Iterable<ImportDirective> _getImportDirectives(CompilationUnit node) =>
-      node.directives
-          .where(_isImportDirective)
-          .map((e) => e as ImportDirective);
+      node.directives.whereType<ImportDirective>();
 }

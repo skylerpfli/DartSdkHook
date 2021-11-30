@@ -17,14 +17,14 @@ Calling `toString` on a runtime type is a non-trivial operation that can
 negatively impact performance. It's better to avoid it.
 
 **BAD:**
-```
+```dart
 class A {
   String toString() => '$runtimeType()';
 }
 ```
 
 **GOOD:**
-```
+```dart
 class A {
   String toString() => 'A()';
 }
@@ -84,7 +84,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
   }
 
-  bool _isRuntimeTypeAccess(Expression target) =>
+  bool _isRuntimeTypeAccess(Expression? target) =>
       target is PropertyAccess &&
           (target.target is ThisExpression ||
               target.target is SuperExpression) &&
@@ -101,9 +101,12 @@ class _Visitor extends SimpleAstVisitor<void> {
         if (n is MixinDeclaration) return true;
         if (n is ClassDeclaration && n.isAbstract) return true;
         if (n is ExtensionDeclaration) {
-          final extendedElement = n.declaredElement.extendedType.element;
-          return !(extendedElement is ClassElement &&
-              !extendedElement.isAbstract);
+          var declaredElement = n.declaredElement;
+          if (declaredElement != null) {
+            final extendedElement = declaredElement.extendedType.element;
+            return !(extendedElement is ClassElement &&
+                !extendedElement.isAbstract);
+          }
         }
         return false;
       }) !=

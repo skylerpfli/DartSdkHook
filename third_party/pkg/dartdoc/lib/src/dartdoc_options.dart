@@ -39,6 +39,8 @@ const int _kIntVal = 0;
 const double _kDoubleVal = 0.0;
 const bool _kBoolVal = true;
 
+const String _kCompileArgsTagName = 'compile_args';
+
 int get _usageLineLength => stdout.hasTerminal ? stdout.terminalColumns : null;
 
 typedef ConvertYamlToType<T> = T Function(YamlMap, String, ResourceProvider);
@@ -100,7 +102,7 @@ class CategoryConfiguration {
                   .join(canonicalYamlPath, documentationMarkdown));
           if (!resourceProvider.getFile(documentationMarkdown).exists) {
             throw DartdocFileMissing(
-                'In categories definition for ${name}, "markdown" resolves to '
+                'In categories definition for $name, "markdown" resolves to '
                 'the missing file $documentationMarkdown');
           }
         }
@@ -147,14 +149,22 @@ class ToolDefinition {
       List<String> command,
       List<String> setupCommand,
       String description,
-      ResourceProvider resourceProvider) {
+      ResourceProvider resourceProvider,
+      {List<String> compileArgs}) {
     assert(command != null);
     assert(command.isNotEmpty);
     assert(description != null);
     if (isDartExecutable(command[0])) {
       return DartToolDefinition(
-          command, setupCommand, description, resourceProvider);
+          command, setupCommand, description, resourceProvider,
+          compileArgs: compileArgs ?? const []);
     } else {
+      if (compileArgs != null && compileArgs.isNotEmpty) {
+        throw DartdocOptionError(
+            'Compile arguments may only be specified for Dart tools, but '
+            '$_kCompileArgsTagName of $compileArgs were specified for '
+            '$command.');
+      }
       return ToolDefinition(command, setupCommand, description);
     }
   }
@@ -274,6 +284,9 @@ class SnapshotCache {
 class DartToolDefinition extends ToolDefinition {
   final ResourceProvider _resourceProvider;
 
+  /// A list of arguments to add to the snapshot compilation arguments.
+  final List<String> compileArgs;
+
   /// Takes a list of args to modify, and returns the name of the executable
   /// to run. If no snapshot file existed, then create one and modify the args
   /// so that if they are executed with dart, will result in the snapshot being
@@ -289,8 +302,14 @@ class DartToolDefinition extends ToolDefinition {
     var needsSnapshot = snapshot.needsSnapshot;
     if (needsSnapshot) {
       args.insertAll(0, [
+        // TODO(jcollins-g): remove ignore and verbosity resets once
+        // https://dart-review.googlesource.com/c/sdk/+/181421 is safely
+        // in the rearview mirror in dev/Flutter.
+        '--ignore-unrecognized-flags',
+        '--verbosity=error',
         '--snapshot=${_resourceProvider.pathContext.absolute(snapshotFile.path)}',
-        '--snapshot_kind=app-jit'
+        '--snapshot_kind=app-jit',
+        ...compileArgs,
       ]);
     } else {
       await snapshot.snapshotValid();
@@ -302,8 +321,10 @@ class DartToolDefinition extends ToolDefinition {
   }
 
   DartToolDefinition(List<String> command, List<String> setupCommand,
-      String description, this._resourceProvider)
-      : super(command, setupCommand, description);
+      String description, this._resourceProvider,
+      {this.compileArgs = const []})
+      : assert(compileArgs != null),
+        super(command, setupCommand, description);
 }
 
 /// A configuration class that can interpret [ToolDefinition]s from a YAML map.
@@ -330,7 +351,8 @@ class ToolConfiguration {
     for (var entry in yamlMap.entries) {
       var name = entry.key.toString();
       var toolMap = entry.value;
-      var description;
+      List<String> compileArgs;
+      String description;
       List<String> command;
       List<String> setupCommand;
       if (toolMap is Map) {
@@ -338,32 +360,32 @@ class ToolConfiguration {
         List<String> findCommand([String prefix = '']) {
           List<String> command;
           // If the command key is given, then it applies to all platforms.
-          var commandFrom = toolMap.containsKey('${prefix}command')
+          var commandFromKey = toolMap.containsKey('${prefix}command')
               ? '${prefix}command'
               : '$prefix${Platform.operatingSystem}';
-          if (toolMap.containsKey(commandFrom)) {
-            if (toolMap[commandFrom].value is String) {
-              command = [toolMap[commandFrom].toString()];
+          if (toolMap.containsKey(commandFromKey)) {
+            var commandFrom = toolMap[commandFromKey] as YamlNode;
+            if (commandFrom.value is String) {
+              command = [commandFrom.toString()];
               if (command[0].isEmpty) {
                 throw DartdocOptionError(
                     'Tool commands must not be empty. Tool $name command entry '
-                    '"$commandFrom" must contain at least one path.');
+                    '"$commandFromKey" must contain at least one path.');
               }
-            } else if (toolMap[commandFrom] is YamlList) {
-              command = (toolMap[commandFrom] as YamlList)
-                  .map<String>((node) => node.toString())
-                  .toList();
+            } else if (commandFrom is YamlList) {
+              command =
+                  commandFrom.map<String>((node) => node.toString()).toList();
               if (command.isEmpty) {
                 throw DartdocOptionError(
                     'Tool commands must not be empty. Tool $name command entry '
-                    '"$commandFrom" must contain at least one path.');
+                    '"$commandFromKey" must contain at least one path.');
               }
             } else {
               throw DartdocOptionError(
                   'Tool commands must be a path to an executable, or a list of '
                   'strings that starts with a path to an executable. '
-                  'The tool $name has a $commandFrom entry that is a '
-                  '${toolMap[commandFrom].runtimeType}');
+                  'The tool $name has a $commandFromKey entry that is a '
+                  '${commandFrom.runtimeType}');
             }
           }
           return command;
@@ -371,6 +393,27 @@ class ToolConfiguration {
 
         command = findCommand();
         setupCommand = findCommand('setup_');
+
+        List<String> findArgs() {
+          List<String> args;
+          if (toolMap.containsKey(_kCompileArgsTagName)) {
+            var compileArgs = toolMap[_kCompileArgsTagName];
+            if (compileArgs is String) {
+              args = [toolMap[_kCompileArgsTagName].toString()];
+            } else if (compileArgs is YamlList) {
+              args =
+                  compileArgs.map<String>((node) => node.toString()).toList();
+            } else {
+              throw DartdocOptionError(
+                  'Tool compile arguments must be a list of strings. The tool '
+                  '$name has a $_kCompileArgsTagName entry that is a '
+                  '${compileArgs.runtimeType}');
+            }
+          }
+          return args;
+        }
+
+        compileArgs = findArgs();
       } else {
         throw DartdocOptionError(
             'Tools must be defined as a map of tool names to definitions. Tool '
@@ -416,7 +459,8 @@ class ToolConfiguration {
             setupCommand;
       }
       newToolDefinitions[name] = ToolDefinition.fromCommand(
-          [executable] + command, setupCommand, description, resourceProvider);
+          [executable] + command, setupCommand, description, resourceProvider,
+          compileArgs: compileArgs ?? const []);
     }
     return ToolConfiguration._(newToolDefinitions, resourceProvider);
   }
@@ -476,15 +520,15 @@ class _OptionValueWithContext<T> {
   T get resolvedValue {
     if (value is List<String>) {
       return (value as List<String>)
-          .map((v) => pathContext.canonicalize(resolveTildePath(v)))
+          .map((v) => pathContext.canonicalizeWithTilde(v))
           .cast<String>()
           .toList() as T;
     } else if (value is String) {
-      return pathContext.canonicalize(resolveTildePath(value as String)) as T;
+      return pathContext.canonicalizeWithTilde(value as String) as T;
     } else if (value is Map<String, String>) {
       return (value as Map<String, String>)
           .map<String, String>((String key, String value) {
-        return MapEntry(key, pathContext.canonicalize(resolveTildePath(value)));
+        return MapEntry(key, pathContext.canonicalizeWithTilde(value));
       }) as T;
     } else {
       throw UnsupportedError('Type $T is not supported for resolvedValue');
@@ -593,16 +637,17 @@ abstract class DartdocOption<T> {
       _OptionValueWithContext<Object> valueWithContext, String missingFilename);
 
   /// Call [_onMissing] for every path that does not exist.
-  void _validatePaths(_OptionValueWithContext<dynamic> valueWithContext) {
+  void _validatePaths(_OptionValueWithContext<Object> valueWithContext) {
     if (!mustExist) return;
     assert(isDir || isFile);
     List<String> resolvedPaths;
-    if (valueWithContext.value is String) {
+    var value = valueWithContext.value;
+    if (value is String) {
       resolvedPaths = [valueWithContext.resolvedValue];
-    } else if (valueWithContext.value is List<String>) {
-      resolvedPaths = valueWithContext.resolvedValue.toList();
-    } else if (valueWithContext.value is Map<String, String>) {
-      resolvedPaths = valueWithContext.resolvedValue.values.toList();
+    } else if (value is List<String>) {
+      resolvedPaths = valueWithContext.resolvedValue as List;
+    } else if (value is Map<String, String>) {
+      resolvedPaths = (valueWithContext.resolvedValue as Map).values.toList();
     } else {
       assert(
           false,
@@ -855,10 +900,10 @@ abstract class DartdocSyntheticOption<T> implements DartdocOption<T> {
 
   void _onMissingFromSynthetic(
       _OptionValueWithContext<Object> valueWithContext, String missingPath) {
-    var description = 'Synthetic configuration option ${name} from <internal>';
+    var description = 'Synthetic configuration option $name from <internal>';
     throw DartdocFileMissing(
         '$description, computed as ${valueWithContext.value}, resolves to '
-        'missing path: "${missingPath}"');
+        'missing path: "$missingPath"');
   }
 }
 
@@ -1057,9 +1102,8 @@ abstract class _DartdocFileOption<T> implements DartdocOption<T> {
       _OptionValueWithContext<Object> valueWithContext, String missingPath) {
     var dartdocYaml = resourceProvider.pathContext.join(
         valueWithContext.canonicalDirectoryPath, valueWithContext.definingFile);
-    throw DartdocFileMissing('Field ${fieldName} from ${dartdocYaml}, set to '
-        '${valueWithContext.value}, resolves to missing path: '
-        '"${missingPath}"');
+    throw DartdocFileMissing('Field $fieldName from $dartdocYaml, set to '
+        '${valueWithContext.value}, resolves to missing path: "$missingPath"');
   }
 
   @override
@@ -1090,12 +1134,11 @@ abstract class _DartdocFileOption<T> implements DartdocOption<T> {
 
   /// Searches all dartdoc_options files through parent directories, starting at
   /// [dir], for the option and returns one once found.
-  _OptionValueWithContext<Object> _valueAtFromFilesFirstFound(Folder dir) {
+  _OptionValueWithContext<Object> _valueAtFromFilesFirstFound(Folder folder) {
     _OptionValueWithContext<Object> value;
-    while (true) {
+    for (var dir in folder.withAncestors) {
       value = _valueAtFromFile(dir);
-      if (value != null || dir.parent == null) break;
-      dir = dir.parent;
+      if (value != null) break;
     }
     return value;
   }
@@ -1103,13 +1146,11 @@ abstract class _DartdocFileOption<T> implements DartdocOption<T> {
   /// Searches all dartdoc_options files for the option, and returns the value
   /// in the top-most parent directory `dartdoc_options.yaml` file it is
   /// mentioned in.
-  _OptionValueWithContext<Object> _valueAtFromFilesLastFound(Folder dir) {
+  _OptionValueWithContext<Object> _valueAtFromFilesLastFound(Folder folder) {
     _OptionValueWithContext<Object> value;
-    while (true) {
+    for (var dir in folder.withAncestors) {
       var tmpValue = _valueAtFromFile(dir);
       if (tmpValue != null) value = tmpValue;
-      dir = dir.parent;
-      if (dir == null) break;
     }
     return value;
   }
@@ -1119,19 +1160,18 @@ abstract class _DartdocFileOption<T> implements DartdocOption<T> {
   _OptionValueWithContext<Object> _valueAtFromFile(Folder dir) {
     var yamlFileData = _yamlAtDirectory(dir);
     var contextPath = yamlFileData.canonicalDirectoryPath;
-    dynamic yamlData = yamlFileData.data ?? {};
+    Object yamlData = yamlFileData.data ?? {};
     for (var key in keys) {
-      if (!yamlData.containsKey(key)) return null;
-      yamlData = yamlData[key] ?? {};
+      if (yamlData is Map && !yamlData.containsKey(key)) return null;
+      yamlData = (yamlData as Map)[key] ?? {};
     }
 
-    var returnData;
+    Object returnData;
     if (_isListString) {
       if (yamlData is YamlList) {
-        returnData = <String>[];
-        for (var item in yamlData) {
-          returnData.add(item.toString());
-        }
+        returnData = [
+          for (var item in yamlData) item.toString(),
+        ];
       }
     } else if (yamlData is YamlMap) {
       // TODO(jcollins-g): This special casing is unfortunate.  Consider
@@ -1169,41 +1209,38 @@ abstract class _DartdocFileOption<T> implements DartdocOption<T> {
         returnData = yamlData;
       }
     } else {
-      throw UnsupportedError('Type ${T} is not supported');
+      throw UnsupportedError('Type $T is not supported');
     }
     return _OptionValueWithContext(returnData as T, contextPath,
         definingFile: 'dartdoc_options.yaml');
   }
 
-  _YamlFileData _yamlAtDirectory(Folder dir) {
-    var canonicalPaths = <String>[
-      resourceProvider.pathContext.canonicalize(dir.path)
-    ];
-    if (!_yamlAtCanonicalPathCache.containsKey(canonicalPaths.first)) {
-      var yamlData = _YamlFileData({}, _directoryCurrentPath);
-      if (dir.exists) {
-        File dartdocOptionsFile;
+  _YamlFileData _yamlAtDirectory(Folder folder) {
+    var canonicalPaths = <String>[];
+    var yamlData = _YamlFileData({}, _directoryCurrentPath);
 
-        while (true) {
-          dartdocOptionsFile = resourceProvider.getFile(resourceProvider
-              .pathContext
-              .join(dir.path, 'dartdoc_options.yaml'));
-          if (dartdocOptionsFile.exists || dir.parent == null) {
-            break;
-          }
-          dir = dir.parent;
-          canonicalPaths
-              .add(resourceProvider.pathContext.canonicalize(dir.path));
-        }
+    for (var dir in folder.withAncestors) {
+      var canonicalPath =
+          resourceProvider.pathContext.canonicalize(folder.path);
+      if (_yamlAtCanonicalPathCache.containsKey(canonicalPath)) {
+        yamlData = _yamlAtCanonicalPathCache[canonicalPath];
+        break;
+      }
+      canonicalPaths.add(canonicalPath);
+      if (dir.exists) {
+        var dartdocOptionsFile = resourceProvider.getFile(resourceProvider
+            .pathContext
+            .join(dir.path, 'dartdoc_options.yaml'));
         if (dartdocOptionsFile.exists) {
           yamlData = _YamlFileData(
               loadYaml(dartdocOptionsFile.readAsStringSync()),
               resourceProvider.pathContext.canonicalize(dir.path));
+          break;
         }
       }
-      canonicalPaths.forEach((p) => _yamlAtCanonicalPathCache[p] = yamlData);
     }
-    return _yamlAtCanonicalPathCache[canonicalPaths.first];
+    canonicalPaths.forEach((p) => _yamlAtCanonicalPathCache[p] = yamlData);
+    return yamlData;
   }
 }
 
@@ -1240,8 +1277,8 @@ abstract class _DartdocArgOption<T> implements DartdocOption<T> {
       example = '0.76';
     }
     throw DartdocOptionError(
-        'Invalid argument value: --${argName}, set to "${value}", must be a '
-        '${T}.  Example:  --${argName} ${example}');
+        'Invalid argument value: --$argName, set to "$value", must be a '
+        '$T.  Example:  --$argName $example');
   }
 
   /// Returns null if no argument was given on the command line.
@@ -1258,8 +1295,8 @@ abstract class _DartdocArgOption<T> implements DartdocOption<T> {
   void _onMissingFromArgs(
       _OptionValueWithContext<Object> valueWithContext, String missingPath) {
     throw DartdocFileMissing(
-        'Argument --${argName}, set to ${valueWithContext.value}, resolves to '
-        'missing path: "${missingPath}"');
+        'Argument --$argName, set to ${valueWithContext.value}, resolves to '
+        'missing path: "$missingPath"');
   }
 
   /// Generates an _OptionValueWithContext using the value of the argument from
@@ -1294,7 +1331,7 @@ abstract class _DartdocArgOption<T> implements DartdocOption<T> {
         (retval as Map<String, String>)[pairList.first] = pairList.last;
       }
     } else {
-      throw UnsupportedError('Type ${T} is not supported');
+      throw UnsupportedError('Type $T is not supported');
     }
     return _OptionValueWithContext(retval, _directoryCurrentPath);
   }
@@ -1314,7 +1351,7 @@ abstract class _DartdocArgOption<T> implements DartdocOption<T> {
     argName = argName.replaceAllMapped(camelCaseRegexp, (Match m) {
       var before = m.group(1);
       var after = m.group(2).toLowerCase();
-      return '${before}-${after}';
+      return '$before-$after';
     });
     return argName;
   }
@@ -1353,7 +1390,7 @@ abstract class _DartdocArgOption<T> implements DartdocOption<T> {
           hide: hide,
           splitCommas: splitCommas);
     } else {
-      throw UnsupportedError('Type ${T} is not supported');
+      throw UnsupportedError('Type $T is not supported');
     }
   }
 }
@@ -1398,7 +1435,7 @@ class DartdocOptionContext extends DartdocOptionContextBase
     } else {
       context = resourceProvider.getFolder(resourceProvider.pathContext
           .canonicalize(
-              resource is File ? resource.parent.path : resource.path));
+              resource is File ? resource.parent2.path : resource.path));
     }
   }
 
@@ -1594,8 +1631,9 @@ Future<List<DartdocOption<Object>>> createDartdocOptions(
     // to set the flutter root.
     DartdocOptionSyntheticOnly<String>(
         'flutterRoot',
-        (DartdocSyntheticOption<String> option, Folder dir) =>
-            resolveTildePath(Platform.environment['FLUTTER_ROOT']),
+        (DartdocSyntheticOption<String> option, Folder dir) => resourceProvider
+            .pathContext
+            .resolveTildePath(Platform.environment['FLUTTER_ROOT']),
         resourceProvider,
         optionIs: OptionKind.dir,
         help: 'Root of the Flutter SDK, specified from environment.',
@@ -1701,7 +1739,7 @@ Future<List<DartdocOption<Object>>> createDartdocOptions(
         help: 'Generate ONLY the docs for the Dart SDK.'),
     DartdocOptionArgSynth<String>('sdkDir',
         (DartdocSyntheticOption<String> option, Folder dir) {
-      if (!option.parent['sdkDocs'].valueAt(dir) &&
+      if (!(option.parent['sdkDocs'].valueAt(dir) as bool) &&
           (option.root['topLevelPackageMeta'].valueAt(dir) as PackageMeta)
               .requiresFlutter) {
         String flutterRoot = option.root['flutterRoot'].valueAt(dir);

@@ -16,7 +16,7 @@ const _details = r'''
 Don't apply a null check when a nullable value is accepted.
 
 **BAD:**
-```
+```dart
 f(int? i);
 m() {
   int? j;
@@ -26,7 +26,7 @@ m() {
 ```
 
 **GOOD:**
-```
+```dart
 f(int? i);
 m() {
   int? j;
@@ -36,18 +36,19 @@ m() {
 
 ''';
 
-DartType getExpectedType(PostfixExpression node) {
+DartType? getExpectedType(PostfixExpression node) {
   var realNode =
       node.thisOrAncestorMatching((e) => e.parent is! ParenthesizedExpression);
-  var parent = realNode.parent;
+  var parent = realNode?.parent;
 
   // in return value
   if (parent is ReturnStatement || parent is ExpressionFunctionBody) {
-    var parentExpression = parent.thisOrAncestorOfType<FunctionExpression>();
+    var parentExpression = parent?.thisOrAncestorOfType<FunctionExpression>();
     if (parentExpression == null) {
       return null;
     }
-    return (parentExpression.staticType as FunctionType).returnType;
+    var staticType = parentExpression.staticType;
+    return staticType is FunctionType ? staticType.returnType : null;
   }
   // assignment
   if (parent is AssignmentExpression &&
@@ -60,7 +61,7 @@ DartType getExpectedType(PostfixExpression node) {
   }
   // in variable declaration
   if (parent is VariableDeclaration) {
-    return parent.declaredElement.type;
+    return parent.declaredElement?.type;
   }
   // as right member of binary operator
   if (parent is BinaryExpression && parent.rightOperand == realNode) {
@@ -75,8 +76,8 @@ DartType getExpectedType(PostfixExpression node) {
     realNode = parent;
     parent = parent.parent;
   }
-  if (parent is ArgumentList) {
-    return (realNode as Expression).staticParameterElement?.type;
+  if (parent is ArgumentList && realNode is Expression) {
+    return realNode.staticParameterElement?.type;
   }
   return null;
 }

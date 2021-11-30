@@ -20,7 +20,7 @@ ambiguous.  Using named boolean parameters is much more readable because it
 inherently describes what the boolean value represents.
 
 **BAD:**
-```
+```dart
 Task(true);
 Task(false);
 ListBox(false, true, true);
@@ -28,7 +28,7 @@ Button(false);
 ```
 
 **GOOD:**
-```
+```dart
 Task.oneShot();
 Task.repeating();
 ListBox(scroll: true, showScrollbars: true);
@@ -65,10 +65,11 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
-    if (!node.declaredElement.isPrivate) {
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null && !declaredElement.isPrivate) {
       final parametersToLint =
-          node.parameters?.parameters?.where(_isFormalParameterToLint);
-      if (parametersToLint?.isNotEmpty == true) {
+          node.parameters.parameters.where(_isFormalParameterToLint);
+      if (parametersToLint.isNotEmpty == true) {
         rule.reportLint(parametersToLint.first);
       }
     }
@@ -76,10 +77,11 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitFunctionDeclaration(FunctionDeclaration node) {
-    if (!node.declaredElement.isPrivate) {
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null && !declaredElement.isPrivate) {
       final parametersToLint = node.functionExpression.parameters?.parameters
-          ?.where(_isFormalParameterToLint);
-      if (parametersToLint?.isNotEmpty == true) {
+          .where(_isFormalParameterToLint);
+      if (parametersToLint != null && parametersToLint.isNotEmpty) {
         rule.reportLint(parametersToLint.first);
       }
     }
@@ -87,14 +89,16 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
-    if (!node.isSetter &&
-        !node.declaredElement.isPrivate &&
+    var declaredElement = node.declaredElement;
+    if (declaredElement != null &&
+        !node.isSetter &&
+        !declaredElement.isPrivate &&
         !node.isOperator &&
         !DartTypeUtilities.hasInheritedMethod(node) &&
-        !_isOverridingMember(node.declaredElement)) {
+        !_isOverridingMember(declaredElement)) {
       final parametersToLint =
-          node.parameters?.parameters?.where(_isFormalParameterToLint);
-      if (parametersToLint?.isNotEmpty == true) {
+          node.parameters?.parameters.where(_isFormalParameterToLint);
+      if (parametersToLint != null && parametersToLint.isNotEmpty) {
         rule.reportLint(parametersToLint.first);
       }
     }
@@ -102,9 +106,10 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   bool _isFormalParameterToLint(FormalParameter node) =>
       !node.isNamed &&
-      DartTypeUtilities.isClass(node.declaredElement.type, 'bool', 'dart.core');
+      DartTypeUtilities.isClass(
+          node.declaredElement?.type, 'bool', 'dart.core');
 
-  bool _isOverridingMember(Element member) {
+  bool _isOverridingMember(Element? member) {
     if (member == null) {
       return false;
     }
@@ -113,9 +118,13 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (classElement == null) {
       return false;
     }
+    var name = member.name;
+    if (name == null) {
+      return false;
+    }
     final libraryUri = classElement.library.source.uri;
-    return context.inheritanceManager.getInherited(
-            classElement.thisType, Name(libraryUri, member.name)) !=
+    return context.inheritanceManager
+            .getInherited(classElement.thisType, Name(libraryUri, name)) !=
         null;
   }
 }

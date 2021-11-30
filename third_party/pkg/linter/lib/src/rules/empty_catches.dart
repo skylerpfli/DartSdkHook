@@ -20,14 +20,14 @@ caught and suppressed.  Alternatively, the exception identifier can be named wit
 underscores (e.g., `_`) to indicate that we intend to skip it.
 
 **BAD:**
-```
+```dart
 try {
   ...
 } catch(exception) { }
 ```
 
 **GOOD:**
-```
+```dart
 try {
   ...
 } catch(e) {
@@ -81,7 +81,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
     final body = node.body;
     if (node.body.statements.isEmpty &&
-        body.rightBracket?.precedingComments == null) {
+        body.rightBracket.precedingComments == null) {
       rule.reportLint(body);
     }
   }

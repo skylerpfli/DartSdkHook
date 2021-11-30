@@ -46,8 +46,8 @@ class StringLiteralIterator extends Iterator<int> {
   ///
   /// Before iteration begins, this points to the character before the first
   /// rune.
-  int get offset => _offset!;
-  int? _offset;
+  int get offset => _offset;
+  late int _offset;
 
   /// The offset of the next rune.
   ///
@@ -73,6 +73,9 @@ class StringLiteralIterator extends Iterator<int> {
   /// When switching to a new string in [_strings], this is updated to point to
   /// that string's component runes.
   Iterator<int>? _runes;
+
+  /// The result of the last call to `_runes.moveNext`.
+  bool _runesHasCurrent = false;
 
   /// Creates a new [StringLiteralIterator] iterating over the contents of
   /// [literal].
@@ -101,10 +104,10 @@ class StringLiteralIterator extends Iterator<int> {
   bool moveNext() {
     // If we're at beginning of a [SimpleStringLiteral], move forward until
     // there's actually text to consume.
-    while (_runes == null || _runes!.current == -1) {
+    while (_runes == null || !_runesHasCurrent) {
       if (_strings.isEmpty) {
         // Move the offset past the end of the text.
-        _offset = _nextOffset;
+        _offset = _nextOffset!;
         _current = null;
         return false;
       }
@@ -122,10 +125,10 @@ class StringLiteralIterator extends Iterator<int> {
       _nextOffset = string.contentsOffset;
       _isRaw = string.isRaw;
       _runes = text.runes.iterator;
-      _runes!.moveNext();
+      _runesHasCurrent = _runes!.moveNext();
     }
 
-    _offset = _nextOffset;
+    _offset = _nextOffset!;
     _current = _nextRune();
     if (_current != null) return true;
 
@@ -235,7 +238,7 @@ class StringLiteralIterator extends Iterator<int> {
 
   /// Move [_runes] to the next rune and update [_nextOffset].
   bool _moveRunesNext() {
-    var result = _runes!.moveNext();
+    var result = _runesHasCurrent = _runes!.moveNext();
     _nextOffset = _nextOffset! + 1;
     return result;
   }

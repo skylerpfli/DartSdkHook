@@ -18,7 +18,7 @@ const _details = r'''
 Using initializing formals when possible makes your code more terse.
 
 **BAD:**
-```
+```dart
 class Point {
   num x, y;
   Point(num x, num y) {
@@ -29,7 +29,7 @@ class Point {
 ```
 
 **GOOD:**
-```
+```dart
 class Point {
   num x, y;
   Point(this.x, this.y);
@@ -37,7 +37,7 @@ class Point {
 ```
 
 **BAD:**
-```
+```dart
 class Point {
   num x, y;
   Point({num x, num y}) {
@@ -48,7 +48,7 @@ class Point {
 ```
 
 **GOOD:**
-```
+```dart
 class Point {
   num x, y;
   Point({this.x, this.y});
@@ -62,7 +62,7 @@ such a lint would require either renaming the field or renaming the parameter,
 and both of those actions would potentially be a breaking change. For example,
 the following will not generate a lint:
 
-```
+```darts
 class Point {
   bool isEnabled;
   Point({bool enabled}) {
@@ -89,13 +89,13 @@ Iterable<ConstructorFieldInitializer>
             ConstructorDeclaration node) =>
         node.initializers.whereType<ConstructorFieldInitializer>();
 
-Element _getLeftElement(AssignmentExpression assignment) =>
+Element? _getLeftElement(AssignmentExpression assignment) =>
     DartTypeUtilities.getCanonicalElement(assignment.writeElement);
 
-Iterable<Element> _getParameters(ConstructorDeclaration node) =>
-    node.parameters.parameters.map((e) => e.identifier.staticElement);
+Iterable<Element?> _getParameters(ConstructorDeclaration node) =>
+    node.parameters.parameters.map((e) => e.identifier?.staticElement);
 
-Element _getRightElement(AssignmentExpression assignment) =>
+Element? _getRightElement(AssignmentExpression assignment) =>
     DartTypeUtilities.getCanonicalElementFromIdentifier(
         assignment.rightHandSide);
 
@@ -123,8 +123,8 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
     final parameters = _getParameters(node);
-    final parametersUsedOnce = <Element>{};
-    final parametersUsedMoreThanOnce = <Element>{};
+    final parametersUsedOnce = <Element?>{};
+    final parametersUsedMoreThanOnce = <Element?>{};
 
     bool isAssignmentExpressionToLint(AssignmentExpression assignment) {
       final leftElement = _getLeftElement(assignment);
@@ -135,7 +135,7 @@ class _Visitor extends SimpleAstVisitor<void> {
           leftElement is FieldElement &&
           !leftElement.isSynthetic &&
           leftElement.enclosingElement ==
-              node.declaredElement.enclosingElement &&
+              node.declaredElement?.enclosingElement &&
           parameters.contains(rightElement) &&
           (!parametersUsedMoreThanOnce.contains(rightElement) &&
                   !(rightElement as ParameterElement).isNamed ||
@@ -145,24 +145,28 @@ class _Visitor extends SimpleAstVisitor<void> {
     bool isConstructorFieldInitializerToLint(
         ConstructorFieldInitializer constructorFieldInitializer) {
       final expression = constructorFieldInitializer.expression;
-      return !(constructorFieldInitializer.fieldName.staticElement?.isPrivate ??
-              true) &&
-          expression is SimpleIdentifier &&
-          parameters.contains(expression.staticElement) &&
-          (!parametersUsedMoreThanOnce.contains(expression.staticElement) &&
-                  !(expression.staticElement as ParameterElement).isNamed ||
-              (constructorFieldInitializer.fieldName.staticElement?.name ==
-                  expression.staticElement.name));
+      if (expression is SimpleIdentifier) {
+        var staticElement = expression.staticElement;
+        return staticElement is ParameterElement &&
+            !(constructorFieldInitializer.fieldName.staticElement?.isPrivate ??
+                true) &&
+            parameters.contains(staticElement) &&
+            (!parametersUsedMoreThanOnce.contains(expression.staticElement) &&
+                    !staticElement.isNamed ||
+                (constructorFieldInitializer.fieldName.staticElement?.name ==
+                    expression.staticElement?.name));
+      }
+      return false;
     }
 
-    void processElement(Element element) {
+    void processElement(Element? element) {
       if (!parametersUsedOnce.add(element)) {
         parametersUsedMoreThanOnce.add(element);
       }
     }
 
     node.parameters.parameterElements
-        .where((p) => p.isInitializingFormal)
+        .where((p) => p != null && p.isInitializingFormal)
         .forEach(processElement);
 
     _getAssignmentExpressionsInConstructorBody(node)

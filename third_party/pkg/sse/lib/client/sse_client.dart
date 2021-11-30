@@ -22,6 +22,8 @@ class SseClient extends StreamChannelMixin<String> {
 
   final _logger = Logger('SseClient');
 
+  final _onConnected = Completer();
+
   int _lastMessageId = -1;
 
   EventSource _eventSource;
@@ -37,10 +39,14 @@ class SseClient extends StreamChannelMixin<String> {
     _eventSource =
         EventSource('$serverUrl?sseClientId=$clientId', withCredentials: true);
     _serverUrl = '$serverUrl?sseClientId=$clientId';
-    _outgoingController.stream
-        .listen(_onOutgoingMessage, onDone: _onOutgoingDone);
+    _eventSource.onOpen.first.whenComplete(() {
+      _onConnected.complete();
+      _outgoingController.stream
+          .listen(_onOutgoingMessage, onDone: _onOutgoingDone);
+    });
     _eventSource.addEventListener('message', _onIncomingMessage);
     _eventSource.addEventListener('control', _onIncomingControlMessage);
+
     _eventSource.onOpen.listen((_) {
       _errorTimer?.cancel();
     });
@@ -51,12 +57,20 @@ class SseClient extends StreamChannelMixin<String> {
         _errorTimer = Timer(const Duration(seconds: 5), () {
           _incomingController.addError(error);
           close();
+          if (!_onConnected.isCompleted) {
+            // This call must happen after the call to close() which checks
+            // whether the completer was completed earlier.
+            _onConnected.completeError(error);
+          }
         });
       }
     });
   }
 
+  @Deprecated('Use onConnected instead.')
   Stream<Event> get onOpen => _eventSource.onOpen;
+
+  Future<void> get onConnected => _onConnected.future;
 
   /// Add messages to this [StreamSink] to send them to the server.
   ///
@@ -73,6 +87,9 @@ class SseClient extends StreamChannelMixin<String> {
 
   void close() {
     _eventSource.close();
+    // If the initial connection was never established. Add a listener so close
+    // adds a done event to [sink].
+    if (!_onConnected.isCompleted) _outgoingController.stream.drain();
     _incomingController.close();
     _outgoingController.close();
   }

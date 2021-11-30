@@ -5,12 +5,15 @@
 /// A library containing an abstract documentation generator.
 library dartdoc.generator;
 
+import 'package:analyzer/file_system/file_system.dart';
 import 'package:dartdoc/src/dartdoc_options.dart';
 import 'package:dartdoc/src/model/model.dart' show PackageGraph;
 import 'package:dartdoc/src/package_meta.dart';
 import 'package:dartdoc/src/warnings.dart';
 
 abstract class FileWriter {
+  ResourceProvider get resourceProvider;
+
   /// All filenames written by this generator.
   Set<String> get writtenFiles;
 
@@ -27,27 +30,6 @@ abstract class Generator {
   /// Generate the documentation for the given package using the specified
   /// writer. Completes the returned future when done.
   Future<void> generate(PackageGraph packageGraph, FileWriter writer);
-}
-
-/// Dartdoc options related to generators generally.
-mixin GeneratorContext on DartdocOptionContextBase {
-  List<String> get footer => optionSet['footer'].valueAt(context);
-
-  List<String> get footerText => optionSet['footerText'].valueAt(context);
-
-  List<String> get header => optionSet['header'].valueAt(context);
-
-  bool get prettyIndexJson => optionSet['prettyIndexJson'].valueAt(context);
-
-  String get favicon => optionSet['favicon'].valueAt(context);
-
-  String get relCanonicalPrefix =>
-      optionSet['relCanonicalPrefix'].valueAt(context);
-
-  String get templatesDir => optionSet['templatesDir'].valueAt(context);
-
-  // TODO(jdkoren): duplicated temporarily so that GeneratorContext is enough for configuration.
-  bool get useBaseHref => optionSet['useBaseHref'].valueAt(context);
 }
 
 Future<List<DartdocOption<Object>>> createGeneratorOptions(

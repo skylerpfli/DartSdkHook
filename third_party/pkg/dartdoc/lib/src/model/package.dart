@@ -9,7 +9,8 @@ import 'package:dartdoc/src/io_utils.dart';
 import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/package_meta.dart';
 import 'package:dartdoc/src/warnings.dart';
-import 'package:path/path.dart' as path;
+import 'package:meta/meta.dart';
+import 'package:path/path.dart' as path show Context;
 import 'package:pub_semver/pub_semver.dart';
 
 @Deprecated('Public variable intended to be private; will be removed as early '
@@ -25,7 +26,13 @@ RegExp get substituteNameVersion => Package._substituteNameVersion;
 // TODO: Find an approach that doesn't require doing this.
 // Unlikely to be mistaken for an identifier, html tag, or something else that
 // might reasonably exist normally.
-final String HTMLBASE_PLACEHOLDER = '\%\%__HTMLBASE_dartdoc_internal__\%\%';
+@internal
+const String htmlBasePlaceholder = '\%\%__HTMLBASE_dartdoc_internal__\%\%';
+
+@Deprecated('Public variable intended to be private; will be removed as early '
+    'as Dartdoc 1.0.0')
+// ignore: non_constant_identifier_names
+const String HTMLBASE_PLACEHOLDER = htmlBasePlaceholder;
 
 /// A [LibraryContainer] that contains [Library] objects related to a particular
 /// package.
@@ -111,29 +118,34 @@ class Package extends LibraryContainer
     return _documentationAsHtml;
   }
 
+  String /*?*/ _documentation;
+
   @override
   String get documentation {
-    return hasDocumentationFile
-        ? packageGraph.resourceProvider
-            .readAsMalformedAllowedStringSync(documentationFile)
-        : null;
+    if (_documentation == null) {
+      final docFile = documentationFile;
+      if (docFile != null) {
+        _documentation = packageGraph.resourceProvider
+            .readAsMalformedAllowedStringSync(docFile);
+      }
+    }
+    return _documentation;
   }
 
   @override
-  bool get hasDocumentation =>
-      documentationFile != null &&
-      packageGraph.resourceProvider
-          .readAsMalformedAllowedStringSync(documentationFile)
-          .isNotEmpty;
+  bool get hasDocumentation => documentation?.isNotEmpty == true;
 
   @override
-  bool get hasExtendedDocumentation => documentation.isNotEmpty;
+  bool get hasExtendedDocumentation => hasDocumentation;
 
-  // TODO: Clients should use [documentationFile] so they can act differently on
-  // plain text or markdown.
+  File /*?*/ _documentationFile;
+
+  @Deprecated(
+      'Instead use [documentationFile] which will be `null` if this package does not have one.')
   bool get hasDocumentationFile => documentationFile != null;
 
-  File get documentationFile => packageMeta.getReadmeContents();
+  File /*?*/ get documentationFile =>
+      _documentationFile ??= packageMeta.getReadmeContents();
 
   @override
   String get oneLineDoc => '';
@@ -168,7 +180,7 @@ class Package extends LibraryContainer
                 // assembled from multiple locations?
                 packageGraph.hasEmbedderSdk &&
                     packageMeta.isSdk &&
-                    libraries.any((l) => path.isWithin(
+                    libraries.any((l) => _pathContext.isWithin(
                         packageGraph.packageMeta.dir.path,
                         (l.element.source.fullName))) ||
                 // autoIncludeDependencies means everything is local.
@@ -231,9 +243,9 @@ class Package extends LibraryContainer
 
     if (documentedWhere == DocumentLocation.remote) {
       _baseHref = _remoteBaseHref;
-      if (!_baseHref.endsWith('/')) _baseHref = '${_baseHref}/';
+      if (!_baseHref.endsWith('/')) _baseHref = '$_baseHref/';
     } else {
-      _baseHref = config.useBaseHref ? '' : HTMLBASE_PLACEHOLDER;
+      _baseHref = config.useBaseHref ? '' : htmlBasePlaceholder;
     }
 
     return _baseHref;
@@ -279,7 +291,7 @@ class Package extends LibraryContainer
   String get href => '$baseHref$filePath';
 
   @override
-  String get location => path.toUri(packageMeta.resolvedDir).toString();
+  String get location => _pathContext.toUri(packageMeta.resolvedDir).toString();
 
   @override
   String get name => _name;
@@ -331,7 +343,7 @@ class Package extends LibraryContainer
     return _categories;
   }
 
-  Iterable<LibraryContainer> get categoriesWithPublicLibraries =>
+  Iterable<Category> get categoriesWithPublicLibraries =>
       categories.where((c) => c.publicLibraries.isNotEmpty);
 
   Iterable<Category> get documentedCategories =>
@@ -371,7 +383,7 @@ class Package extends LibraryContainer
   String _packagePath;
 
   String get packagePath {
-    _packagePath ??= path.canonicalize(packageMeta.dir.path);
+    _packagePath ??= _pathContext.canonicalize(packageMeta.dir.path);
     return _packagePath;
   }
 
@@ -386,4 +398,6 @@ class Package extends LibraryContainer
 
   @override
   List<String> get containerOrder => config.packageOrder;
+
+  path.Context get _pathContext => _packageGraph.resourceProvider.pathContext;
 }

@@ -19,7 +19,7 @@ If a constructor parameter is using `this.x` to initialize a field, then the
 type of the parameter is understood to be the same type as the field.
 
 **GOOD:**
-```
+```dart
 class Point {
   int x, y;
   Point(this.x, this.y);
@@ -27,7 +27,7 @@ class Point {
 ```
 
 **BAD:**
-```
+```dart
 class Point {
   int x, y;
   Point(int this.x, int this.y);
@@ -62,11 +62,13 @@ class _Visitor extends SimpleAstVisitor<void> {
     var nodeType = node.type;
     if (nodeType != null) {
       var cls = node.thisOrAncestorOfType<ClassDeclaration>()?.declaredElement;
-      var field = cls.getField(node.identifier.name);
-      // If no such field exists, the code is invalid; do not report lint.
-      if (field != null) {
-        if (nodeType.type == field.type) {
-          rule.reportLint(nodeType);
+      if (cls != null) {
+        var field = cls.getField(node.identifier.name);
+        // If no such field exists, the code is invalid; do not report lint.
+        if (field != null) {
+          if (nodeType.type == field.type) {
+            rule.reportLint(nodeType);
+          }
         }
       }
     }

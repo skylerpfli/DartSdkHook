@@ -2,18 +2,17 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:async/async.dart';
 import 'package:path/path.dart' as p;
 import 'package:pool/pool.dart';
 
 import '../util/io.dart';
-import 'suite.dart';
+import '../util/package_config.dart';
 import 'configuration.dart';
+import 'suite.dart';
 
 /// A regular expression matching the first status line printed by dart2js.
 final _dart2jsStatus =
@@ -69,7 +68,7 @@ class CompilerPool {
           '--enable-asserts',
           wrapperPath,
           '--out=$jsPath',
-          '--packages=${await Isolate.packageConfig}',
+          '--packages=${await packageConfigUri}',
           ..._extraArgs,
           ...suiteConfig.dart2jsArgs
         ];

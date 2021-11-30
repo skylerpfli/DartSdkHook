@@ -20,7 +20,7 @@ As null is a special type, no class can be equivalent to it.  Thus, it is
 redundant to check whether the other instance is null. 
 
 **BAD:**
-```
+```dart
 class Person {
   final String name;
 
@@ -31,7 +31,7 @@ class Person {
 ```
 
 **GOOD:**
-```
+```dart
 class Person {
   final String name;
 
@@ -45,20 +45,20 @@ class Person {
 bool _isComparingEquality(TokenType tokenType) =>
     tokenType == TokenType.BANG_EQ || tokenType == TokenType.EQ_EQ;
 
-bool _isComparingParameterWithNull(BinaryExpression node, Element parameter) =>
+bool _isComparingParameterWithNull(BinaryExpression node, Element? parameter) =>
     _isComparingEquality(node.operator.type) &&
     ((DartTypeUtilities.isNullLiteral(node.leftOperand) &&
             _isParameter(node.rightOperand, parameter)) ||
         (DartTypeUtilities.isNullLiteral(node.rightOperand) &&
             _isParameter(node.leftOperand, parameter)));
 
-bool _isParameter(Expression expression, Element parameter) =>
+bool _isParameter(Expression expression, Element? parameter) =>
     DartTypeUtilities.getCanonicalElementFromIdentifier(expression) ==
     parameter;
 
-bool _isParameterWithQuestion(AstNode node, Element parameter) =>
+bool _isParameterWithQuestion(AstNode node, Element? parameter) =>
     (node is PropertyAccess &&
-        node.operator?.type == TokenType.QUESTION_PERIOD &&
+        node.operator.type == TokenType.QUESTION_PERIOD &&
         DartTypeUtilities.getCanonicalElementFromIdentifier(node.target) ==
             parameter) ||
     (node is MethodInvocation &&
@@ -67,7 +67,7 @@ bool _isParameterWithQuestion(AstNode node, Element parameter) =>
             parameter);
 
 bool _isParameterWithQuestionQuestion(
-        BinaryExpression node, Element parameter) =>
+        BinaryExpression node, Element? parameter) =>
     node.operator.type == TokenType.QUESTION_QUESTION &&
     _isParameter(node.leftOperand, parameter);
 
@@ -96,7 +96,10 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
     final parameters = node.parameters?.parameters;
-    if (node.name.token?.type == TokenType.EQ_EQ && parameters?.length == 1) {
+    if (parameters == null) {
+      return;
+    }
+    if (node.name.token.type == TokenType.EQ_EQ && parameters.length == 1) {
       final parameter = DartTypeUtilities.getCanonicalElementFromIdentifier(
           parameters.first.identifier);
       bool checkIfParameterIsNull(AstNode node) =>

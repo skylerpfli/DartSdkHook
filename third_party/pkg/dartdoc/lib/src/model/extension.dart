@@ -93,9 +93,6 @@ class Extension extends Container
     return _typeParameters;
   }
 
-  @override
-  ParameterizedElementType get modelType => super.modelType;
-
   List<ModelElement> _allModelElements;
   @override
   List<ModelElement> get allModelElements {
@@ -120,4 +117,10 @@ class Extension extends Container
     assert(canonicalLibrary == library);
     return '${package.baseHref}$filePath';
   }
+
+  @override
+  bool get hasPublicConstructors => false;
+
+  @override
+  Iterable<Constructor> get publicConstructorsSorted => [];
 }

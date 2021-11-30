@@ -4,7 +4,7 @@ import 'package:dartdoc/src/model/model.dart';
 import 'package:dartdoc/src/render/model_element_renderer.dart';
 import 'package:dartdoc/src/utils.dart';
 import 'package:dartdoc/src/warnings.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as path show Context;
 
 final _templatePattern = RegExp(
     r'[ ]*{@template\s+(.+?)}([\s\S]+?){@endtemplate}[ ]*(\n?)',
@@ -61,11 +61,15 @@ mixin DocumentationComment
   String processCommentWithoutTools(String documentationComment) {
     var docs = stripComments(documentationComment);
     if (!docs.contains('{@')) {
+      _analyzeCodeBlocks(docs);
       return docs;
     }
     docs = _injectExamples(docs);
     docs = _injectYouTube(docs);
     docs = _injectAnimations(docs);
+
+    _analyzeCodeBlocks(docs);
+
     // TODO(srawlins): Processing templates here causes #2281. But leaving them
     // unprocessed causes #2272.
     docs = _stripHtmlAndAddToIndex(docs);
@@ -79,6 +83,7 @@ mixin DocumentationComment
     // Must evaluate tools first, in case they insert any other directives.
     docs = await _evaluateTools(docs);
     docs = processCommentDirectives(docs);
+    _analyzeCodeBlocks(docs);
     return docs;
   }
 
@@ -186,11 +191,14 @@ mixin DocumentationComment
   /// ```yaml
   /// dartdoc:
   ///   tools:
-  ///     # Prefixes the given input with "## "
-  ///     # Path is relative to project root.
-  ///     prefix: "bin/prefix.dart"
-  ///     # Prints the date
-  ///     date: "/bin/date"
+  ///     prefix:
+  ///       # Path is relative to project root.
+  ///       command: ["bin/prefix.dart"]
+  ///       description: "Prefixes the given input with '##'."
+  ///       compile_args: ["--no-sound-null-safety"]
+  ///     date:
+  ///       command: ["/bin/date"]
+  ///       description: "Prints the date"
   /// ```
   ///
   /// In code:
@@ -235,7 +243,8 @@ mixin DocumentationComment
             'SOURCE_PATH':
                 (sourceFileName == null || package?.packagePath == null)
                     ? null
-                    : path.relative(sourceFileName, from: package.packagePath),
+                    : pathContext.relative(sourceFileName,
+                        from: package.packagePath),
             'PACKAGE_PATH': package?.packagePath,
             'PACKAGE_NAME': package?.name,
             'LIBRARY_NAME': library?.fullyQualifiedName,
@@ -271,8 +280,8 @@ mixin DocumentationComment
         // Already warned about an invalid parameter if this happens.
         return '';
       }
-      var lang =
-          args['lang'] ?? path.extension(args['src']).replaceFirst('.', '');
+      var lang = args['lang'] ??
+          pathContext.extension(args['src']).replaceFirst('.', '');
 
       var replacement = match[0]; // default to fully matched string.
 
@@ -327,14 +336,14 @@ mixin DocumentationComment
     var file = src + fragExtension;
     var region = args['region'] ?? '';
     if (region.isNotEmpty) {
-      var dir = path.dirname(src);
-      var basename = path.basenameWithoutExtension(src);
-      var ext = path.extension(src);
-      file = path.join(dir, '$basename-$region$ext$fragExtension');
+      var dir = pathContext.dirname(src);
+      var basename = pathContext.basenameWithoutExtension(src);
+      var ext = pathContext.extension(src);
+      file = pathContext.join(dir, '$basename-$region$ext$fragExtension');
     }
     args['file'] = config.examplePathPrefix == null
         ? file
-        : path.join(config.examplePathPrefix, file);
+        : pathContext.join(config.examplePathPrefix, file);
     return args;
   }
 
@@ -670,6 +679,29 @@ mixin DocumentationComment
         return '$option${match[1] ?? ''}${match[3] ?? ''}${match[4] ?? ''}';
       }
       return '$option${match[0]}';
+    });
+  }
+
+  static final _codeBlockPattern =
+      RegExp(r'^[ ]{0,3}(`{3,}|~{3,})(.*)$', multiLine: true);
+
+  /// Analyze fenced code blocks present in the documentation comment,
+  /// warning if there is no language specified.
+  void _analyzeCodeBlocks(String docs) {
+    final results = _codeBlockPattern.allMatches(docs).toList(growable: false);
+    final firstOfPair = <Match>[];
+    for (var i = 0; i < results.length; i++) {
+      if (i.isEven && i != results.length - 1) {
+        firstOfPair.add(results[i]);
+      }
+    }
+    firstOfPair.forEach((element) {
+      final result = element.group(2).trim();
+      if (result.isEmpty) {
+        warn(PackageWarning.missingCodeBlockLanguage,
+            message:
+                'A fenced code block in Markdown should have a language specified');
+      }
     });
   }
 }
