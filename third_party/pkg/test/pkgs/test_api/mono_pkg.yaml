@@ -1,0 +1,17 @@
+sdk:
+  - dev
+  - stable
+
+stages:
+  - analyze_and_format:
+    - group:
+      - format
+      - analyze: --fatal-infos
+      sdk:
+      - dev
+  - unit_test:
+    - group:
+      - command: dart test --preset travis -x browser
+        os:
+        - linux
+        - windows

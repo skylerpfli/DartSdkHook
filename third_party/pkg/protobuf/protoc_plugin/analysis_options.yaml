@@ -1,0 +1,14 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  strong-mode:
+    implicit-casts: false
+
+linter:
+  rules:
+    camel_case_types: true
+    control_flow_in_finally: true
+    directives_ordering: true
+    prefer_relative_imports: true
+    prefer_single_quotes: true
+    throw_in_finally: true
