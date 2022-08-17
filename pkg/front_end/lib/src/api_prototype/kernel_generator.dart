@@ -25,6 +25,8 @@ import '../kernel_generator_impl.dart'
 
 import 'compiler_options.dart' show CompilerOptions;
 
+import 'package:vm/target/flutter.dart';
+
 /// Generates a kernel representation of the program whose main library is in
 /// the given [source].
 ///
@@ -54,7 +56,7 @@ Future<CompilerResult?> kernelForProgramInternal(
     Uri source, CompilerOptions options,
     {bool retainDataForTesting: false, bool requireMain: true}) async {
   ProcessedOptions pOptions =
-      new ProcessedOptions(options: options, inputs: [source]);
+      new ProcessedOptions(options: options, inputs: [source, ...FlutterTarget.entryPointList]);
   return await CompilerContext.runWithOptions(pOptions, (context) async {
     CompilerResult result = await generateKernelInternal(
         includeHierarchyAndCoreTypes: true,

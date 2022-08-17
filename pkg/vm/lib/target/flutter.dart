@@ -8,6 +8,12 @@ import 'package:kernel/target/changed_structure_notifier.dart';
 import 'package:kernel/target/targets.dart';
 import 'package:kernel/transformations/track_widget_constructor_locations.dart';
 import 'package:vm/target/vm.dart' show VmTarget;
+import 'dart:convert';
+import 'dart:io';
+
+abstract class FlutterProgramTransformer {
+  void transform(Component component);
+}
 
 class FlutterTarget extends VmTarget {
   FlutterTarget(TargetFlags flags) : super(flags);
@@ -19,6 +25,14 @@ class FlutterTarget extends VmTarget {
 
   @override
   bool get enableSuperMixins => true;
+
+  /// Transformer
+  static List<FlutterProgramTransformer> _flutterProgramTransformers = [];
+
+  static List<FlutterProgramTransformer> get flutterProgramTransformers => _flutterProgramTransformers;
+
+  /// 额外添加的输入文件，避免从未被import时被优化
+  static List<Uri> entryPointList = [];
 
   // This is the order that bootstrap libraries are loaded according to
   // `runtime/vm/object_store.h`.
@@ -62,6 +76,14 @@ class FlutterTarget extends VmTarget {
         logger: logger, changedStructureNotifier: changedStructureNotifier);
     if (flags.trackWidgetCreation) {
       _widgetTracker.transform(component, libraries, changedStructureNotifier);
+    }
+
+    /// 工程插桩
+    if (_flutterProgramTransformers.length > 0) {
+      int flutterProgramTransformersLen = _flutterProgramTransformers.length;
+      for (int i = 0; i < flutterProgramTransformersLen; i++) {
+        _flutterProgramTransformers[i].transform(component);
+      }
     }
   }
 }
