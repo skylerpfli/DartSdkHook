@@ -1,0 +1,9 @@
+.children
+.dart_tool/
+.idea
+.packages
+.pub
+build/
+**/lib/generated/**
+packages
+pubspec.lock

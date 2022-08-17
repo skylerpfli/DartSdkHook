@@ -1,0 +1,33 @@
+include: package:lints/recommended.yaml
+analyzer:
+  language:
+    strict-inference: true
+    strict-raw-types: true
+  strong-mode:
+    implicit-casts: false
+  errors:
+    dead_code: error
+    unused_element: error
+    unused_import: error
+    unused_local_variable: error
+    # The example app explicitly takes a String of user-generated HTML and
+    # inserts it straight into a <div> using innerHtml.
+    unsafe_html: ignore
+linter:
+  rules:
+    - camel_case_types
+    # https://github.com/dart-lang/linter/issues/574
+    #- comment_references
+    - control_flow_in_finally
+    - directives_ordering
+    - empty_statements
+    - hash_and_equals
+    - implementation_imports
+    - iterable_contains_unrelated_type
+    - list_remove_unrelated_type
+    - non_constant_identifier_names
+    - only_throw_errors
+    - overridden_fields
+    - package_api_docs
+    - test_types_in_equals
+    - throw_in_finally
