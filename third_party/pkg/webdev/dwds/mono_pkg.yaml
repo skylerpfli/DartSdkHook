@@ -1,0 +1,16 @@
+# See https://pub.dev/packages/mono_repo for details
+stages:
+  - analyzer_and_format:
+    - group:
+      - dartfmt
+      - dartanalyzer: --fatal-infos --fatal-warnings .
+      - test: test/build/ensure_version_test.dart
+      dart: dev
+  - unit_test:
+    - group:
+      - command: Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+      - test:
+      dart: dev
+    - test:
+      os: windows
+      dart: dev
