@@ -1,0 +1,20 @@
+// Copyright (c) 2018, the Dart project authors.  Please see the AUTHORS file
+// for details. All rights reserved. Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
+
+syntax = "proto2";
+
+package protobuf_unittest;
+
+// Cause a conflict with the auto-generated extension class.
+enum ExtensionEnumNameConflict {
+  UNKNOWN = 0;
+}
+
+message YetAnotherMessageToBeExtended {
+  extensions 1 to max;
+}
+
+extend YetAnotherMessageToBeExtended {
+  optional int32 enumConflictExtension = 1;
+}

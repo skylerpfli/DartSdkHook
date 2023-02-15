@@ -1,0 +1,46 @@
+name: Dart CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8
+      - uses: dart-lang/setup-dart@6a218f2413a3e78e9087f638a238f6b40893203d
+        with:
+          sdk: dev
+      - id: install
+        run: dart pub get
+      - run: dart format --output=none --set-exit-if-changed .
+        if: steps.install.outcome == 'success'
+      - run: dart analyze --fatal-infos
+        if: steps.install.outcome == 'success'
+
+  test:
+    needs: analyze
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        sdk: [2.12.0, dev]
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8
+      - uses: dart-lang/setup-dart@6a218f2413a3e78e9087f638a238f6b40893203d
+        with:
+          sdk: ${{ matrix.sdk }}
+      - id: install
+        run: dart pub get
+      - run: dart test --platform vm
+        if: steps.install.outcome == 'success'
+      - run: dart test --platform chrome
+        if: steps.install.outcome == 'success'

@@ -1,0 +1,19 @@
+# This file contains the analysis options used for code in the webdev
+# repository.
+
+include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    # Ignore generated files
+    - "lib/data/*"
+    # Ignore debug extension builds
+    - "debug_extension/dev_build/*"
+    - "debug_extension/prod_build/*"
+    - "debug_extension_mv3/dev_build/*"
+    - "debug_extension_mv3/prod_build/*"
+
+linter:
+  rules:
+    - prefer_final_locals
+    - unawaited_futures

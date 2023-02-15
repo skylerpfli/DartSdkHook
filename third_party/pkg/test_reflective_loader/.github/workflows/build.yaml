@@ -1,0 +1,39 @@
+name: Dart
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  schedule:
+    # “At 00:00 (UTC) on Sunday.”
+    - cron: '0 0 * * 0'
+
+env:
+  PUB_ENVIRONMENT: bot.github
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [dev, stable]
+
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8
+      - uses: dart-lang/setup-dart@6a218f2413a3e78e9087f638a238f6b40893203d
+        with:
+          sdk: ${{ matrix.sdk }}
+          
+      - name: pub get
+        run: dart pub get
+
+      - name: dart format
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: dart analyze
+        run: dart analyze
+
+      - name: dart test
+        run: dart test

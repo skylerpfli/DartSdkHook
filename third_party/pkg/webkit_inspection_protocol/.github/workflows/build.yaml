@@ -1,0 +1,37 @@
+name: Dart
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+permissions: read-all
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8
+    - uses: dart-lang/setup-dart@6a218f2413a3e78e9087f638a238f6b40893203d
+    - uses: nanasess/setup-chromedriver@7cbd35794f8ab317f778c3172fb86c1e9b2853f7
+
+    - name: Install dependencies
+      run:  dart pub get
+
+    - name: Validate formatting
+      run:  dart format --output=none --set-exit-if-changed .
+
+    - name: Analyze source code
+      run:  dart analyze
+
+    # Disabled; tracked via #75.
+    # - name: Run tests
+    #   run: |
+    #     export DISPLAY=:99
+    #     chromedriver --port=4444 --url-base=/wd/hub &
+    #     sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+    #     dart test
+    #   env:
+    #     CHROMEDRIVER_ARGS: '--no-sandbox --headless'
