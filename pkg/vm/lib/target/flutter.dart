@@ -89,13 +89,6 @@ class FlutterTarget extends VmTarget {
       _widgetTracker.transform(component, libraries, changedStructureNotifier);
     }
 
-    /// 工程插桩
-    if (_flutterProgramTransformers.length > 0) {
-      int flutterProgramTransformersLen = _flutterProgramTransformers.length;
-      for (int i = 0; i < flutterProgramTransformersLen; i++) {
-        _flutterProgramTransformers[i].transform(component);
-      }
-    }
   }
 
   @override
@@ -110,13 +103,6 @@ class FlutterTarget extends VmTarget {
       {void Function(String msg)? logger,
         ChangedStructureNotifier? changedStructureNotifier}) {
 
-    /// 常量后工程插桩
-    if (_transformersAfterConstant.length > 0) {
-      int flutterProgramTransformersLen = _transformersAfterConstant.length;
-      for (int i = 0; i < flutterProgramTransformersLen; i++) {
-        _transformersAfterConstant[i].transform(component);
-      }
-    }
 
     super.performModularTransformationsOnLibraries(
         component,

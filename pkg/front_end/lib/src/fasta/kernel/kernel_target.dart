@@ -16,7 +16,7 @@ import 'package:kernel/transformations/value_class.dart' as valueClass;
 import 'package:kernel/type_algebra.dart' show Substitution;
 import 'package:kernel/type_environment.dart' show TypeEnvironment;
 import 'package:package_config/package_config.dart' hide LanguageVersion;
-
+import 'package:vm/target/flutter.dart';
 import '../../api_prototype/experimental_flags.dart'
     show ExperimentalFlag, GlobalFeatures;
 import '../../api_prototype/file_system.dart' show FileSystem;
@@ -1581,6 +1581,14 @@ class KernelTarget extends TargetImplementation {
   /// Run all transformations that are needed when building a bundle of
   /// libraries for the first time.
   void runBuildTransformations() {
+    /// 工程插桩
+    if (FlutterTarget.flutterProgramTransformers.length > 0) {
+      int flutterProgramTransformersLen = FlutterTarget.flutterProgramTransformers.length;
+      for (int i = 0; i < flutterProgramTransformersLen; i++) {
+        FlutterTarget.flutterProgramTransformers[i].transform(component!);
+      }
+    }
+
     backendTarget.performPreConstantEvaluationTransformations(
         component!,
         loader.coreTypes,
@@ -1628,6 +1636,15 @@ class KernelTarget extends TargetImplementation {
           loader.hierarchy, loader.referenceFromIndex, environment);
       ticker.logMs("Lowered value classes");
     }
+
+    /// 常量后工程插桩
+    if (FlutterTarget.transformersAfterConstant.length > 0) {
+      int flutterProgramTransformersLen = FlutterTarget.transformersAfterConstant.length;
+      for (int i = 0; i < flutterProgramTransformersLen; i++) {
+        FlutterTarget.transformersAfterConstant[i].transform(component!);
+      }
+    }
+
 
     backendTarget.performModularTransformationsOnLibraries(
         component!,
