@@ -8,11 +8,30 @@ import 'package:kernel/target/changed_structure_notifier.dart';
 import 'package:kernel/target/targets.dart';
 import 'package:kernel/transformations/track_widget_constructor_locations.dart';
 import 'package:vm/target/vm.dart' show VmTarget;
+import 'dart:convert';
+import 'dart:io';
+import 'package:kernel/class_hierarchy.dart';
+import 'package:kernel/reference_from_index.dart';
+
+abstract class FlutterProgramTransformer {
+  void transform(Component component);
+}
 
 class FlutterTarget extends VmTarget {
   FlutterTarget(TargetFlags flags) : super(flags);
 
   late final WidgetCreatorTracker _widgetTracker = WidgetCreatorTracker();
+
+  static List<FlutterProgramTransformer> _flutterProgramTransformers = [];
+
+  static List<FlutterProgramTransformer> get flutterProgramTransformers => _flutterProgramTransformers;
+
+  /// 在常量处理后插桩
+  static List<FlutterProgramTransformer> _transformersAfterConstant = [];
+  static List<FlutterProgramTransformer> get transformersAfterConstant => _transformersAfterConstant;
+
+  /// 新增解析文件
+  static List<Uri> entryPointList = [];
 
   @override
   String get name => 'flutter';
@@ -64,5 +83,45 @@ class FlutterTarget extends VmTarget {
     if (flags.trackWidgetCreation) {
       _widgetTracker.transform(component, libraries, changedStructureNotifier);
     }
+
+    /// 工程插桩
+    if (_flutterProgramTransformers.length > 0) {
+      int flutterProgramTransformersLen = _flutterProgramTransformers.length;
+      for (int i = 0; i < flutterProgramTransformersLen; i++) {
+        _flutterProgramTransformers[i].transform(component);
+      }
+    }
+  }
+
+  @override
+  void performModularTransformationsOnLibraries(
+      Component component,
+      CoreTypes coreTypes,
+      ClassHierarchy hierarchy,
+      List<Library> libraries,
+      Map<String, String>? environmentDefines,
+      DiagnosticReporter diagnosticReporter,
+      ReferenceFromIndex? referenceFromIndex,
+      {void Function(String msg)? logger,
+        ChangedStructureNotifier? changedStructureNotifier}) {
+
+    /// 常量后工程插桩
+    if (_transformersAfterConstant.length > 0) {
+      int flutterProgramTransformersLen = _transformersAfterConstant.length;
+      for (int i = 0; i < flutterProgramTransformersLen; i++) {
+        _transformersAfterConstant[i].transform(component);
+      }
+    }
+
+    super.performModularTransformationsOnLibraries(
+        component,
+        coreTypes,
+        hierarchy,
+        libraries,
+        environmentDefines,
+        diagnosticReporter,
+        referenceFromIndex,
+        logger: logger,
+        changedStructureNotifier: changedStructureNotifier);
   }
 }
