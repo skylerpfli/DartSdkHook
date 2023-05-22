@@ -1,0 +1,33 @@
+include: package:dart_flutter_team_lints/analysis_options.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+
+linter:
+  rules:
+    - avoid_private_typedef_functions
+    - avoid_unused_constructor_parameters
+    - avoid_void_async
+    - cancel_subscriptions
+    - collection_methods_unrelated_type
+    - combinators_ordering
+    - comment_references
+    - dangling_library_doc_comments
+    - implicit_call_tearoffs
+    - join_return_with_assignment
+    - library_annotations
+    - missing_whitespace_between_adjacent_strings
+    - no_runtimeType_toString
+    - package_api_docs
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_expression_function_bodies
+    - prefer_final_locals
+    - prefer_relative_imports
+    - test_types_in_equals
+    - unnecessary_library_directive
+    - unreachable_from_main
+    - use_string_buffers
+    - use_string_in_part_of_directives
+    - use_super_parameters

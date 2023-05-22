@@ -1,0 +1,17 @@
+targets:
+  $default:
+    builders:
+      mockito|mockBuilder:
+        generate_for:
+          - example/**.dart
+          - test/end2end/*.dart
+
+builders:
+  mockBuilder:
+    import: "package:mockito/src/builder.dart"
+    builder_factories: ["buildMocks"]
+    build_extensions: {".dart": [".mocks.dart"]}
+    build_to: source
+    auto_apply: dependents
+    defaults:
+      generate_for: ['test/**']

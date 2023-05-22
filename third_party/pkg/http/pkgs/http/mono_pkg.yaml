@@ -1,0 +1,20 @@
+sdk:
+- pubspec
+- dev
+
+stages:
+- analyze_and_format:
+  - analyze: --fatal-infos
+  - format:
+    sdk:
+    - dev
+- unit_test:
+  - test: --platform vm
+    os:
+    - linux
+  - test: --platform chrome
+    os:
+    - linux
+  - command: dart run --define=no_default_http_client=true test/no_default_http_client_test.dart
+    os:
+    - linux

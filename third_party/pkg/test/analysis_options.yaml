@@ -1,0 +1,13 @@
+include: package:lints/recommended.yaml
+analyzer:
+  language:
+    strict-casts: true
+  errors:
+    # There are a number of deprecated members used through this package
+    deprecated_member_use_from_same_package: ignore
+    unsafe_html: ignore
+linter:
+  rules:
+    - avoid_private_typedef_functions
+    - directives_ordering
+    - prefer_single_quotes

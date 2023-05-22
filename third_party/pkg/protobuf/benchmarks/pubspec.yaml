@@ -1,0 +1,30 @@
+# Copyright (c) 2018, the Dart project authors.  Please see the AUTHORS file
+# for details. All rights reserved. Use of this source code is governed by a
+# BSD-style license that can be found in the LICENSE file.
+
+name: protobuf_benchmarks
+description: Benchmarks various protobuf functions
+publish_to: none
+
+environment:
+  sdk: '>=2.18.0 <3.0.0'
+
+dependencies:
+  # NB. When bumping benchmark_harness check if `benchmark_base.BenchmarkBase`
+  # needs updating
+  benchmark_harness: ^2.0.0
+  fixnum: any
+  js: ^0.6.3
+  protobuf: any
+
+dev_dependencies:
+  args: ^2.3.1
+  lints: ^1.0.0
+  path: ^1.8.2
+  pool: ^1.5.1
+  protoc_plugin:
+    path: '../protoc_plugin'
+
+dependency_overrides:
+  protobuf:
+    path: "../protobuf"
